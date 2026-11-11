@@ -16,6 +16,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_init.sql"),
     include_str!("../migrations/0002_drop_fts.sql"),
+    include_str!("../migrations/0003_sync.sql"),
 ];
 
 pub struct Db {

@@ -3,6 +3,7 @@ pub mod note;
 pub mod notebook;
 pub mod query;
 pub mod status;
+pub mod sync;
 pub mod tag;
 
 pub use db::{Db, Error, Result};

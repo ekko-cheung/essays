@@ -54,6 +54,36 @@ export interface Tag {
   noteCount: number;
 }
 
+export type CloseAction = "quit" | "minimize";
+
+export interface Settings {
+  closeAction: CloseAction;
+  syncEnabled: boolean;
+  accountId: string;
+  databaseId: string;
+  /** The token itself never leaves the backend. */
+  hasToken: boolean;
+  autoSync: boolean;
+  intervalMinutes: number;
+}
+
+export interface SettingsInput extends Omit<Settings, "hasToken"> {
+  /** null keeps the stored token. */
+  apiToken: string | null;
+}
+
+export interface SyncReport {
+  pulled: number;
+  pushed: number;
+  changedNoteIds: string[];
+  at: number;
+}
+
+export interface SyncStatus {
+  lastSyncAt: number | null;
+  pending: number;
+}
+
 // Single data-access seam: swap `invoke` for `fetch` here when a web build exists.
 export const api = {
   listNotebooks: () => invoke<Notebook[]>("list_notebooks"),
@@ -90,4 +120,10 @@ export const api = {
     invoke<void>("set_note_status", { noteId, statusId }),
   setNoteTags: (noteId: string, tagIds: string[]) =>
     invoke<void>("set_note_tags", { noteId, tagIds }),
+
+  getSettings: () => invoke<Settings>("get_settings"),
+  saveSettings: (input: SettingsInput) => invoke<Settings>("save_settings", { input }),
+  syncStatus: () => invoke<SyncStatus>("sync_status"),
+  syncTest: () => invoke<void>("sync_test"),
+  syncNow: () => invoke<SyncReport>("sync_now"),
 };

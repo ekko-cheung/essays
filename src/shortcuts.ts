@@ -10,6 +10,7 @@ export const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: `${modLabel}+F`, action: "Search notes" },
   { keys: `${modLabel}+S`, action: "Save now" },
   { keys: `${modLabel}+1 / 2 / 3`, action: "Editor / split / preview" },
+  { keys: `${modLabel}+,`, action: "Open settings" },
   { keys: `${modLabel}+/`, action: "Show this help" },
 ];
 
@@ -17,6 +18,7 @@ export interface ShortcutHandlers {
   newNote: () => void;
   focusSearch: () => void;
   toggleHelp: () => void;
+  openSettings: () => void;
 }
 
 /** Returns true if the event was a known shortcut (and was handled). */
@@ -40,6 +42,9 @@ export function handleShortcut(e: KeyboardEvent, h: ShortcutHandlers): boolean {
       window.dispatchEvent(
         new CustomEvent(EVT_VIEW_MODE, { detail: (["edit", "split", "preview"] as const)[+e.key - 1] }),
       );
+      break;
+    case ",":
+      h.openSettings();
       break;
     case "/":
       h.toggleHelp();

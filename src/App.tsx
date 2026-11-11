@@ -3,6 +3,7 @@ import {
   api,
   type Note,
   type Notebook,
+  type Settings,
   type NoteQuery,
   type NoteSummary,
   type Status,
@@ -16,8 +17,9 @@ import { SearchBar } from "./SearchBar";
 import { SidebarFilters } from "./SidebarFilters";
 import { activeCount, emptyFilters, type Filters } from "./filters";
 import { HelpDialog } from "./HelpDialog";
+import { SettingsDialog } from "./SettingsDialog";
 import { Icon, type IconName } from "./Icon";
-import { handleShortcut, type ShortcutHandlers } from "./shortcuts";
+import { EVT_SAVE_NOW, handleShortcut, type ShortcutHandlers } from "./shortcuts";
 import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "./theme";
 import { ALL_NOTES, buildTree, computeMove, subtreeIds, type DropPosition } from "./tree";
 import { useConfirm } from "./confirm";
@@ -48,6 +50,11 @@ export default function App() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [dialog, setDialog] = useState<"status" | "tag" | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  // Bumped when a sync rewrites the open note, to remount the editor on the new text.
+  const [noteRev, setNoteRev] = useState(0);
   const [themePref, setThemePrefState] = useState<ThemePref>(getThemePref);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +72,10 @@ export default function App() {
       .catch((e) => setError(String(e)))
       .finally(() => setReady(true));
   }, [refreshNotebooks, refreshStatuses, refreshTags]);
+
+  useEffect(() => {
+    api.getSettings().then(setSettings).catch((e) => setError(String(e)));
+  }, []);
 
   const isAll = notebookId === ALL_NOTES;
 
@@ -182,6 +193,7 @@ export default function App() {
       searchRef.current?.select();
     },
     toggleHelp: () => setHelpOpen((v) => !v),
+    openSettings: () => setSettingsOpen(true),
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => void handleShortcut(e, shortcutHandlers.current);
@@ -194,6 +206,60 @@ export default function App() {
     setThemePref(next);
     setThemePrefState(next);
   };
+
+  // Throws on failure so the settings dialog can show the reason; background
+  // callers go through `syncQuietly`.
+  const syncing_ = useRef(false);
+  const noteIdRef = useRef(noteId);
+  noteIdRef.current = noteId;
+  const notebookIdRef = useRef(notebookId);
+  notebookIdRef.current = notebookId;
+  const syncNow = useCallback(async () => {
+    if (syncing_.current) return;
+    syncing_.current = true;
+    setSyncing(true);
+    try {
+      // Push any text still sitting in the editor's debounce window first.
+      window.dispatchEvent(new Event(EVT_SAVE_NOW));
+      await new Promise((r) => setTimeout(r, 50));
+      const report = await api.syncNow();
+      if (report.pulled === 0) return;
+      const nbs = await api.listNotebooks();
+      setNotebooks(nbs);
+      if (notebookIdRef.current !== ALL_NOTES && !nbs.some((n) => n.id === notebookIdRef.current)) {
+        setNotebookId(ALL_NOTES);
+        setNoteId(null);
+      }
+      await Promise.all([refreshStatuses(), refreshTags(), refreshNotes()]);
+      const open = noteIdRef.current;
+      if (open && report.changedNoteIds.includes(open)) {
+        try {
+          setNote(await api.getNote(open));
+          setNoteRev((r) => r + 1);
+        } catch {
+          setNoteId(null); // deleted on another device
+        }
+      }
+    } finally {
+      syncing_.current = false;
+      setSyncing(false);
+    }
+  }, [refreshNotes, refreshStatuses, refreshTags]);
+
+  const syncQuietly = useCallback(
+    () => syncNow().catch((e) => setError(`Sync failed: ${String(e)}`)),
+    [syncNow],
+  );
+
+  // Sync on launch and then on a timer while enabled.
+  const autoSync = settings?.syncEnabled && settings.autoSync && settings.hasToken;
+  const intervalMin = settings?.intervalMinutes ?? 5;
+  useEffect(() => {
+    if (!ready || !autoSync) return;
+    void syncQuietly();
+    const t = window.setInterval(() => void syncQuietly(), intervalMin * 60_000);
+    return () => window.clearInterval(t);
+  }, [ready, autoSync, intervalMin, syncQuietly]);
 
   const onDrop = (dragId: string, targetId: string, pos: DropPosition) => {
     const move = computeMove(notebooks, dragId, targetId, pos);
@@ -260,6 +326,14 @@ export default function App() {
             <Icon name={{ system: "monitor", light: "sun", dark: "moon" }[themePref] as IconName} size={15} />
             {{ system: "System", light: "Light", dark: "Dark" }[themePref]}
           </button>
+          {settings?.syncEnabled && (
+            <button onClick={() => void syncQuietly()} title="Sync now" aria-label="Sync now" disabled={syncing}>
+              <Icon name="refresh" size={15} className={syncing ? "spin" : ""} />
+            </button>
+          )}
+          <button onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings">
+            <Icon name="settings" size={15} />
+          </button>
           <button onClick={() => setHelpOpen(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
             <Icon name="help" size={15} />
           </button>
@@ -310,7 +384,7 @@ export default function App() {
         )}
         {note ? (
           <NoteEditor
-            key={note.id}
+            key={`${note.id}:${noteRev}`}
             note={note}
             statuses={statuses}
             tags={tags}
@@ -341,6 +415,15 @@ export default function App() {
       </main>
 
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {settingsOpen && settings && (
+        <SettingsDialog
+          settings={settings}
+          syncing={syncing}
+          onSaved={setSettings}
+          onSyncNow={syncNow}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {dialog === "status" && (
         <ManageDialog
           title="Statuses"

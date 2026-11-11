@@ -6,11 +6,21 @@ use essays_core::{
     tag::{Tag, DEFAULT_TAG_COLOR},
     Db,
 };
+use serde::Serialize;
+use settings::{CloseAction, Settings, SettingsInput, SettingsView};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{Manager, State};
 
+mod cloud;
+mod settings;
+
 struct AppState {
     db: Mutex<Db>,
+    settings: Mutex<Settings>,
+    settings_path: PathBuf,
+    syncing: AtomicBool,
 }
 
 type CmdResult<T> = Result<T, String>;
@@ -154,6 +164,58 @@ fn set_note_tags(state: State<AppState>, note_id: String, tag_ids: Vec<String>) 
     state.db.lock().unwrap().set_note_tags(&note_id, &tag_ids).map_err(err)
 }
 
+#[tauri::command]
+fn get_settings(state: State<AppState>) -> SettingsView {
+    SettingsView::from(&*state.settings.lock().unwrap())
+}
+
+#[tauri::command]
+fn save_settings(state: State<AppState>, input: SettingsInput) -> CmdResult<SettingsView> {
+    let mut s = state.settings.lock().unwrap();
+    let mut next = s.clone();
+    next.apply(input);
+    next.save(&state.settings_path)?;
+    *s = next;
+    Ok(SettingsView::from(&*s))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncStatus {
+    last_sync_at: Option<i64>,
+    pending: i64,
+}
+
+#[tauri::command]
+fn sync_status(state: State<AppState>) -> CmdResult<SyncStatus> {
+    let db = state.db.lock().unwrap();
+    Ok(SyncStatus {
+        last_sync_at: db.sync_state("last_sync_at").map_err(err)?.and_then(|v| v.parse().ok()),
+        pending: db.dirty_count().map_err(err)?,
+    })
+}
+
+/// Verifies the saved credentials and prepares the remote tables.
+#[tauri::command]
+async fn sync_test(state: State<'_, AppState>) -> CmdResult<()> {
+    let cfg = state.settings.lock().unwrap().sync.clone();
+    cloud::test_connection(&cfg).await
+}
+
+#[tauri::command]
+async fn sync_now(state: State<'_, AppState>) -> CmdResult<cloud::SyncReport> {
+    let cfg = state.settings.lock().unwrap().sync.clone();
+    if !cfg.enabled {
+        return Err("Sync is turned off.".into());
+    }
+    if state.syncing.swap(true, Ordering::SeqCst) {
+        return Err("A sync is already running.".into());
+    }
+    let result = cloud::run(&cfg, &state.db).await;
+    state.syncing.store(false, Ordering::SeqCst);
+    result
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -162,7 +224,13 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let db = Db::open(dir.join("essays.db"))?;
-            app.manage(AppState { db: Mutex::new(db) });
+            let settings_path = dir.join("settings.json");
+            app.manage(AppState {
+                db: Mutex::new(db),
+                settings: Mutex::new(Settings::load(&settings_path)),
+                settings_path,
+                syncing: AtomicBool::new(false),
+            });
 
             // The window is created hidden and shown by the frontend once painted.
             // If the frontend never gets that far (script error, etc.), don't leave
@@ -174,6 +242,16 @@ pub fn run() {
                 });
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let minimize = window.state::<AppState>().settings.lock().unwrap().close_action
+                    == CloseAction::Minimize;
+                if minimize {
+                    api.prevent_close();
+                    let _ = window.minimize();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             list_notebooks,
@@ -195,7 +273,12 @@ pub fn run() {
             update_tag,
             delete_tag,
             set_note_status,
-            set_note_tags
+            set_note_tags,
+            get_settings,
+            save_settings,
+            sync_status,
+            sync_test,
+            sync_now
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
