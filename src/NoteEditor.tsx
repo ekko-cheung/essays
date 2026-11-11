@@ -201,7 +201,7 @@ export function NoteEditor({
             />
           </div>
         )}
-        {mode !== "edit" && (
+        {(mode === "split" || mode === "preview") && (
           <div className="pane preview-pane">
             <MarkdownPreview source={body} />
           </div>
