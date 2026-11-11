@@ -43,13 +43,17 @@ export default function App() {
   const refreshStatuses = useCallback(async () => setStatuses(await api.listStatuses()), []);
   const refreshTags = useCallback(async () => setTags(await api.listTags()), []);
 
-  useEffect(() => {
-    Promise.all([refreshStatuses(), refreshTags()]).catch((e) => setError(String(e)));
-  }, [refreshStatuses, refreshTags]);
-
   const refreshNotebooks = useCallback(async () => {
     setNotebooks(await api.listNotebooks());
   }, []);
+
+  // Show the splash/spinner until the first data is in, so the UI never flashes empty.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    Promise.all([refreshNotebooks(), refreshStatuses(), refreshTags()])
+      .catch((e) => setError(String(e)))
+      .finally(() => setReady(true));
+  }, [refreshNotebooks, refreshStatuses, refreshTags]);
 
   const isAll = notebookId === ALL_NOTES;
 
@@ -97,12 +101,11 @@ export default function App() {
     });
   }, [statuses, tags]);
 
+  const [notesLoaded, setNotesLoaded] = useState(false);
   useEffect(() => {
-    refreshNotebooks().catch((e) => setError(String(e)));
-  }, [refreshNotebooks]);
-
-  useEffect(() => {
-    refreshNotes().catch((e) => setError(String(e)));
+    refreshNotes()
+      .catch((e) => setError(String(e)))
+      .finally(() => setNotesLoaded(true));
   }, [refreshNotes]);
 
   // Load the full note when the selection changes. `cancelled` guards against
@@ -148,6 +151,16 @@ export default function App() {
     const move = computeMove(notebooks, dragId, targetId, pos);
     if (move) run(() => api.moveNotebook(dragId, move.newParentId, move.index), refreshNotebooks);
   };
+
+  // Same markup/classes as the static splash in index.html (styled there), so the
+  // handoff from splash to loading to app has no visual jump.
+  if (!ready || !notesLoaded) {
+    return (
+      <div className="splash">
+        <div className="spinner" />
+      </div>
+    );
+  }
 
   return (
     <div className="app">

@@ -163,6 +163,16 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let db = Db::open(dir.join("essays.db"))?;
             app.manage(AppState { db: Mutex::new(db) });
+
+            // The window is created hidden and shown by the frontend once painted.
+            // If the frontend never gets that far (script error, etc.), don't leave
+            // the user with an invisible app.
+            if let Some(window) = app.get_webview_window("main") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    let _ = window.show();
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
