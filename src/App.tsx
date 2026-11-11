@@ -1,15 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Note, type Notebook, type NoteSummary, type Status, type Tag } from "./api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  api,
+  type Note,
+  type Notebook,
+  type NoteQuery,
+  type NoteSummary,
+  type Status,
+  type Tag,
+} from "./api";
 import { NotebookTree } from "./NotebookTree";
 import { NoteList } from "./NoteList";
 import { NoteEditor } from "./NoteEditor";
 import { ManageDialog } from "./ManageDialog";
-import { buildTree, computeMove, type DropPosition } from "./tree";
+import { FilterBar, activeCount, emptyFilters, type Filters } from "./FilterBar";
+import { ALL_NOTES, buildTree, computeMove, type DropPosition } from "./tree";
 import "./App.css";
+
+const SEARCH_DEBOUNCE_MS = 250;
+
+function loadIncludeSub(): boolean {
+  try {
+    return localStorage.getItem("includeSub") !== "0";
+  } catch {
+    return true;
+  }
+}
 
 export default function App() {
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
-  const [notebookId, setNotebookId] = useState<string | null>(null);
+  const [notebookId, setNotebookId] = useState<string>(ALL_NOTES);
+  const [filters, setFilters] = useState<Filters>(() => emptyFilters(loadIncludeSub()));
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
@@ -29,9 +51,51 @@ export default function App() {
     setNotebooks(await api.listNotebooks());
   }, []);
 
+  const isAll = notebookId === ALL_NOTES;
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  const query = useMemo<NoteQuery>(
+    () => ({
+      notebookId: isAll ? null : notebookId,
+      includeDescendants: filters.includeSub,
+      statusIds: filters.statusIds,
+      noStatus: filters.noStatus,
+      tagIds: filters.tagIds,
+      search: debouncedSearch,
+    }),
+    [isAll, notebookId, filters, debouncedSearch],
+  );
+
+  // Responses can arrive out of order while typing; only the newest request may win.
+  const querySeq = useRef(0);
   const refreshNotes = useCallback(async () => {
-    setNotes(notebookId ? await api.listNotes(notebookId) : []);
-  }, [notebookId]);
+    const seq = ++querySeq.current;
+    const result = await api.queryNotes(query);
+    if (seq === querySeq.current) setNotes(result);
+  }, [query]);
+
+  const changeFilters = (f: Filters) => {
+    setFilters(f);
+    try {
+      localStorage.setItem("includeSub", f.includeSub ? "1" : "0");
+    } catch {
+      /* storage unavailable: just don't remember */
+    }
+  };
+
+  // Drop filter ids whose status/tag was deleted so they can't silently empty the list.
+  useEffect(() => {
+    setFilters((f) => {
+      const sIds = f.statusIds.filter((id) => statuses.some((s) => s.id === id));
+      const tIds = f.tagIds.filter((id) => tags.some((t) => t.id === id));
+      if (sIds.length === f.statusIds.length && tIds.length === f.tagIds.length) return f;
+      return { ...f, statusIds: sIds, tagIds: tIds };
+    });
+  }, [statuses, tags]);
 
   useEffect(() => {
     refreshNotebooks().catch((e) => setError(String(e)));
@@ -71,6 +135,8 @@ export default function App() {
 
   const tree = useMemo(() => buildTree(notebooks), [notebooks]);
   const notebook = notebooks.find((n) => n.id === notebookId) ?? null;
+  const notebookNameById = useMemo(() => new Map(notebooks.map((n) => [n.id, n.name])), [notebooks]);
+  const narrowed = activeCount(filters) > 0 || debouncedSearch.trim() !== "";
 
   const selectNotebook = (id: string) => {
     if (id === notebookId) return;
@@ -114,8 +180,8 @@ export default function App() {
                     }
                   }
                 }
-                if (notebookId && doomed.has(notebookId)) {
-                  setNotebookId(null);
+                if (doomed.has(notebookId)) {
+                  setNotebookId(ALL_NOTES);
                   setNoteId(null);
                 }
               }, refreshNotebooks);
@@ -130,17 +196,34 @@ export default function App() {
       </aside>
 
       <NoteList
-        notebookName={notebook?.name ?? null}
+        title={isAll ? "All Notes" : (notebook?.name ?? "")}
+        canCreate={!isAll}
+        notebookNameById={isAll || filters.includeSub ? notebookNameById : null}
+        narrowed={narrowed}
+        filterBar={
+          <FilterBar
+            statuses={statuses}
+            tags={tags}
+            filters={filters}
+            search={search}
+            canIncludeSub={!isAll}
+            onFilters={changeFilters}
+            onSearch={setSearch}
+          />
+        }
         notes={notes}
         statuses={statuses}
         tags={tags}
         selectedId={noteId}
         onSelect={setNoteId}
         onCreate={() =>
-          notebookId &&
           run(async () => {
             const n = await api.createNote(notebookId);
             setNoteId(n.id);
+            // A fresh note is Active/untagged/empty: clear any narrowing so it shows up.
+            setSearch("");
+            setDebouncedSearch("");
+            changeFilters(emptyFilters(filters.includeSub));
           }, refreshNotes)
         }
         onDelete={(id, title) => {
@@ -180,7 +263,7 @@ export default function App() {
           />
         ) : (
           <p className="muted placeholder">
-            {notebook ? "Select or create a note" : "Select a notebook"}
+            Select {isAll ? "a note" : "or create a note"}
           </p>
         )}
       </main>

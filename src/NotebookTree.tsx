@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TreeNode, DropPosition } from "./tree";
+import { ALL_NOTES, type TreeNode, type DropPosition } from "./tree";
 
 interface Props {
   nodes: TreeNode[];
@@ -148,6 +148,13 @@ export function NotebookTree(props: Props) {
         <button title="New notebook" onClick={() => setEditing("new:root")}>
           +
         </button>
+      </div>
+      <div
+        className={`tree-row ${props.selectedId === ALL_NOTES ? "selected" : ""}`}
+        style={{ paddingLeft: 20 }}
+        onClick={() => props.onSelect(ALL_NOTES)}
+      >
+        <span className="name">All Notes</span>
       </div>
       {editing === "new:root" && renderInput("", (v) => props.onCreate(null, v), 0)}
       {renderNodes(props.nodes, 0)}

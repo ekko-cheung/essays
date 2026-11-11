@@ -4,6 +4,9 @@ export interface TreeNode extends Notebook {
   children: TreeNode[];
 }
 
+/** Pseudo notebook id meaning "notes from every notebook". */
+export const ALL_NOTES = "__all__";
+
 export type DropPosition = "before" | "inside" | "after";
 
 /** Build a forest from the flat list (already sibling-ordered by the backend). */

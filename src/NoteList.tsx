@@ -1,8 +1,16 @@
+import type { ReactNode } from "react";
 import type { NoteSummary, Status, Tag } from "./api";
 import { StatusDot, TagChip } from "./NoteMeta";
 
 interface Props {
-  notebookName: string | null;
+  title: string;
+  /** Notes can only be created inside a concrete notebook, not in "All Notes". */
+  canCreate: boolean;
+  /** Show each note's notebook (when the list spans several notebooks). */
+  notebookNameById: Map<string, string> | null;
+  /** True when a search or filter is narrowing the list (changes the empty message). */
+  narrowed: boolean;
+  filterBar: ReactNode;
   notes: NoteSummary[];
   statuses: Status[];
   tags: Tag[];
@@ -30,37 +38,35 @@ function plainSnippet(md: string) {
     .slice(0, 90);
 }
 
-export function NoteList({
-  notebookName,
-  notes,
-  statuses,
-  tags,
-  selectedId,
-  onSelect,
-  onCreate,
-  onDelete,
-}: Props) {
-  const statusById = new Map(statuses.map((s) => [s.id, s]));
-  const tagById = new Map(tags.map((t) => [t.id, t]));
+export function NoteList(p: Props) {
+  const statusById = new Map(p.statuses.map((s) => [s.id, s]));
+  const tagById = new Map(p.tags.map((t) => [t.id, t]));
   return (
     <section className="note-list">
       <div className="tree-header">
-        <span className="ellipsis">{notebookName ?? "Notes"}</span>
-        {notebookName && (
-          <button className="icon-btn" title="New note" onClick={onCreate}>
+        <span className="ellipsis">{p.title}</span>
+        <span className="count">{p.notes.length}</span>
+        {p.canCreate && (
+          <button className="icon-btn" title="New note" onClick={p.onCreate}>
             +
           </button>
         )}
       </div>
-      {!notebookName && <div className="empty">Select a notebook</div>}
-      {notebookName && notes.length === 0 && (
-        <div className="empty">No notes. Click + to create one.</div>
+      {p.filterBar}
+      {p.notes.length === 0 && (
+        <div className="empty">
+          {p.narrowed
+            ? "No notes match the current search or filters."
+            : p.canCreate
+              ? "No notes. Click + to create one."
+              : "No notes yet."}
+        </div>
       )}
-      {notes.map((n) => (
+      {p.notes.map((n) => (
         <div
           key={n.id}
-          className={`note-row ${selectedId === n.id ? "selected" : ""}`}
-          onClick={() => onSelect(n.id)}
+          className={`note-row ${p.selectedId === n.id ? "selected" : ""}`}
+          onClick={() => p.onSelect(n.id)}
         >
           <div className="note-row-top">
             <StatusDot status={n.statusId ? statusById.get(n.statusId) : undefined} />
@@ -70,7 +76,7 @@ export function NoteList({
               title="Delete note"
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete(n.id, n.title || "Untitled");
+                p.onDelete(n.id, n.title || "Untitled");
               }}
             >
               ×
@@ -80,8 +86,11 @@ export function NoteList({
             <span>{formatDate(n.updatedAt)}</span>
             <span className="ellipsis">{plainSnippet(n.snippet)}</span>
           </div>
-          {n.tagIds.length > 0 && (
+          {(n.tagIds.length > 0 || p.notebookNameById) && (
             <div className="note-tags">
+              {p.notebookNameById && (
+                <span className="nb-name">{p.notebookNameById.get(n.notebookId) ?? "?"}</span>
+              )}
               {n.tagIds.map((id) => {
                 const t = tagById.get(id);
                 return t ? <TagChip key={id} tag={t} /> : null;

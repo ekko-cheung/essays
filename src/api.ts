@@ -28,6 +28,16 @@ export interface NoteSummary {
   updatedAt: number;
 }
 
+/** status: OR · tags: AND · search: every word · all groups ANDed. */
+export interface NoteQuery {
+  notebookId: string | null; // null = all notebooks
+  includeDescendants: boolean;
+  statusIds: string[];
+  noStatus: boolean;
+  tagIds: string[];
+  search: string;
+}
+
 export interface Status {
   id: string;
   name: string;
@@ -54,8 +64,7 @@ export const api = {
   moveNotebook: (id: string, newParentId: string | null, index: number) =>
     invoke<void>("move_notebook", { id, newParentId, index }),
   deleteNotebook: (id: string) => invoke<void>("delete_notebook", { id }),
-  listNotes: (notebookId: string) =>
-    invoke<NoteSummary[]>("list_notes", { notebookId }),
+  queryNotes: (query: NoteQuery) => invoke<NoteSummary[]>("query_notes", { query }),
   getNote: (id: string) => invoke<Note>("get_note", { id }),
   createNote: (notebookId: string) =>
     invoke<Note>("create_note", { notebookId }),

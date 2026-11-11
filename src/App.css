@@ -102,6 +102,38 @@ body { margin: 0; background: var(--bg); }
   }
 }
 
+/* ---- search + filter ---- */
+.note-list .tree-header .count { margin-left: auto; margin-right: 4px; text-transform: none; }
+.filter-bar { padding: 0 10px 8px; border-bottom: 1px solid var(--border); }
+.search-row { display: flex; align-items: center; gap: 4px; }
+.search-input {
+  flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; outline: none;
+}
+.search-input:focus { border-color: var(--accent); }
+.filter-toggle {
+  border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted);
+  font-size: 12px; padding: 4px 8px; cursor: pointer; white-space: nowrap;
+}
+.filter-toggle.on { color: var(--fg); background: var(--hover); }
+.badge {
+  display: inline-block; margin-left: 5px; min-width: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 11px; text-align: center;
+}
+.filter-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.filter-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+.hint { color: var(--muted); font-size: 11px; text-transform: none; letter-spacing: 0; }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.fchip {
+  padding: 1px 9px; border-radius: 999px; font-size: 12px; line-height: 1.6; cursor: pointer;
+  color: var(--fg); border: 1px solid var(--c); background: transparent;
+}
+.fchip:hover { background: color-mix(in srgb, var(--c) 15%, transparent); }
+.fchip.on { background: color-mix(in srgb, var(--c) 40%, transparent); font-weight: 600; }
+.filter-foot { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+.link-btn { border: none; background: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; }
+.nb-name { font-size: 11px; color: var(--muted); padding: 1px 6px; border-radius: 4px; background: var(--hover); }
+
 /* ---- sidebar footer ---- */
 .sidebar { display: flex; flex-direction: column; overflow: hidden; }
 .sidebar .tree { flex: 1; overflow-y: auto; }

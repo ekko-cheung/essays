@@ -1,3 +1,4 @@
+use crate::query::NoteQuery;
 use crate::{now_ms, Db, Error, Result};
 use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
@@ -34,44 +35,10 @@ pub struct NoteSummary {
 impl Db {
     /// Live notes directly inside `notebook_id`, most recently updated first.
     pub fn list_notes(&self, notebook_id: &str) -> Result<Vec<NoteSummary>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, notebook_id, title, substr(body_md, 1, 200), status_id, updated_at
-             FROM note WHERE notebook_id = ?1 AND deleted_at IS NULL
-             ORDER BY updated_at DESC, id DESC",
-        )?;
-        let mut rows: Vec<NoteSummary> = stmt
-            .query_map(params![notebook_id], |r| {
-                Ok(NoteSummary {
-                    id: r.get(0)?,
-                    notebook_id: r.get(1)?,
-                    title: r.get(2)?,
-                    snippet: r.get(3)?,
-                    status_id: r.get(4)?,
-                    tag_ids: Vec::new(),
-                    updated_at: r.get(5)?,
-                })
-            })?
-            .collect::<std::result::Result<_, _>>()?;
-
-        // One query for every tag link in this notebook, instead of one per note.
-        let mut by_note: std::collections::HashMap<String, Vec<String>> = Default::default();
-        let mut links = self.conn.prepare(
-            "SELECT nt.note_id, nt.tag_id FROM note_tag nt
-             JOIN note n ON n.id = nt.note_id
-             JOIN tag t ON t.id = nt.tag_id
-             WHERE n.notebook_id = ?1 AND n.deleted_at IS NULL
-             ORDER BY lower(t.name)",
-        )?;
-        for link in links.query_map(params![notebook_id], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-        })? {
-            let (note_id, tag_id) = link?;
-            by_note.entry(note_id).or_default().push(tag_id);
-        }
-        for row in &mut rows {
-            row.tag_ids = by_note.remove(&row.id).unwrap_or_default();
-        }
-        Ok(rows)
+        self.query_notes(&NoteQuery {
+            notebook_id: Some(notebook_id.to_string()),
+            ..Default::default()
+        })
     }
 
     fn tag_ids_of(&self, note_id: &str) -> Result<Vec<String>> {

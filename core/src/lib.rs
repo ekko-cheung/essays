@@ -1,6 +1,7 @@
 pub mod db;
 pub mod note;
 pub mod notebook;
+pub mod query;
 pub mod status;
 pub mod tag;
 

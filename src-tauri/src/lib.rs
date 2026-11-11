@@ -1,6 +1,7 @@
 use essays_core::{
     note::{Note, NoteSummary},
     notebook::Notebook,
+    query::NoteQuery,
     status::Status,
     tag::{Tag, DEFAULT_TAG_COLOR},
     Db,
@@ -63,8 +64,8 @@ fn delete_notebook(state: State<AppState>, id: String) -> CmdResult<()> {
 }
 
 #[tauri::command]
-fn list_notes(state: State<AppState>, notebook_id: String) -> CmdResult<Vec<NoteSummary>> {
-    state.db.lock().unwrap().list_notes(&notebook_id).map_err(err)
+fn query_notes(state: State<AppState>, query: NoteQuery) -> CmdResult<Vec<NoteSummary>> {
+    state.db.lock().unwrap().query_notes(&query).map_err(err)
 }
 
 #[tauri::command]
@@ -170,7 +171,7 @@ pub fn run() {
             rename_notebook,
             move_notebook,
             delete_notebook,
-            list_notes,
+            query_notes,
             get_note,
             create_note,
             update_note,
