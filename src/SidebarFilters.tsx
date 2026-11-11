@@ -1,4 +1,5 @@
 import type { Status, Tag } from "./api";
+import { Icon } from "./Icon";
 import { activeCount, emptyFilters, toggleId, type Filters } from "./filters";
 
 interface Props {
@@ -15,15 +16,20 @@ interface RowProps {
   count?: number;
   on: boolean;
   onClick: () => void;
+  icon?: "tag";
 }
 
-function FilterRow({ color, name, count, on, onClick }: RowProps) {
+function FilterRow({ color, name, count, on, onClick, icon }: RowProps) {
   return (
     <div className={`tree-row filter-row ${on ? "selected" : ""}`} onClick={onClick} role="checkbox" aria-checked={on}>
-      <span
-        className="status-dot"
-        style={{ background: color ?? "transparent", borderColor: color ?? "var(--muted)" }}
-      />
+      {icon === "tag" ? (
+        <Icon name="tag" size={14} style={{ color: color ?? undefined }} />
+      ) : (
+        <span
+          className="status-dot"
+          style={{ background: color ?? "transparent", borderColor: color ?? "var(--muted)" }}
+        />
+      )}
       <span className="name">{name}</span>
       {count !== undefined && <span className="row-count">{count}</span>}
     </div>
@@ -44,7 +50,7 @@ export function SidebarFilters({ statuses, tags, filters, onFilters, onManage }:
               </button>
             )}
             <button className="icon-btn" title="Manage statuses" onClick={() => onManage("status")}>
-              ⚙
+              <Icon name="sliders" size={14} />
             </button>
           </span>
         </div>
@@ -71,13 +77,14 @@ export function SidebarFilters({ statuses, tags, filters, onFilters, onManage }:
           <span>Tags</span>
           <span className="header-actions">
             <button className="icon-btn" title="Manage tags" onClick={() => onManage("tag")}>
-              ⚙
+              <Icon name="sliders" size={14} />
             </button>
           </span>
         </div>
         {tags.map((t) => (
           <FilterRow
             key={t.id}
+            icon="tag"
             color={t.color}
             name={t.name}
             count={t.noteCount}

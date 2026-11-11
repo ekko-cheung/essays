@@ -1,4 +1,5 @@
 import type { Ref } from "react";
+import { Icon } from "./Icon";
 
 interface Props {
   inputRef: Ref<HTMLInputElement>;
@@ -14,6 +15,7 @@ export function SearchBar({ inputRef, search, onSearch, canIncludeSub, includeSu
   return (
     <div className="filter-bar">
       <div className="search-row">
+        <Icon name="search" size={14} className="search-icon" />
         <input
           ref={inputRef}
           className="search-input"
@@ -24,7 +26,7 @@ export function SearchBar({ inputRef, search, onSearch, canIncludeSub, includeSu
         />
         {search && (
           <button className="icon-btn" title="Clear search" onClick={() => onSearch("")}>
-            ×
+            <Icon name="x" size={14} />
           </button>
         )}
       </div>

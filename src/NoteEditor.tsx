@@ -3,7 +3,8 @@ import { api, type Note, type Status, type Tag } from "./api";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { NoteMeta } from "./NoteMeta";
-import { EVT_SAVE_NOW, EVT_VIEW_MODE } from "./shortcuts";
+import { EVT_SAVE_NOW, EVT_VIEW_MODE, modLabel } from "./shortcuts";
+import { Icon } from "./Icon";
 
 type ViewMode = "edit" | "split" | "preview";
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -150,9 +151,21 @@ export function NoteEditor({
           {{ saved: "Saved", dirty: "Editing…", saving: "Saving…", error: "Save failed" }[saveState]}
         </span>
         <div className="seg">
-          {(["edit", "split", "preview"] as const).map((m) => (
-            <button key={m} className={mode === m ? "on" : ""} onClick={() => setViewMode(m)}>
-              {m}
+          {(
+            [
+              ["edit", "pencil", "Editor"],
+              ["split", "columns", "Split"],
+              ["preview", "eye", "Preview"],
+            ] as const
+          ).map(([m, icon, label], i) => (
+            <button
+              key={m}
+              className={mode === m ? "on" : ""}
+              title={`${label} (${modLabel}+${i + 1})`}
+              aria-label={label}
+              onClick={() => setViewMode(m)}
+            >
+              <Icon name={icon} size={15} />
             </button>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Icon } from "./Icon";
 import { SHORTCUTS } from "./shortcuts";
 
 export function HelpDialog({ onClose }: { onClose: () => void }) {
@@ -14,7 +15,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <div className="dialog-head">
           <h3>Keyboard shortcuts</h3>
           <button className="icon-btn" onClick={onClose}>
-            ×
+            <Icon name="x" size={16} />
           </button>
         </div>
         <table className="shortcut-table">

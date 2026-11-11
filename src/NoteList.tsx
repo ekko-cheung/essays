@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { NoteSummary, Status, Tag } from "./api";
 import { StatusDot, TagChip } from "./NoteMeta";
+import { Icon } from "./Icon";
 
 interface Props {
   title: string;
@@ -48,18 +49,26 @@ export function NoteList(p: Props) {
         <span className="count">{p.notes.length}</span>
         {p.canCreate && (
           <button className="icon-btn" title="New note" onClick={p.onCreate}>
-            +
+            <Icon name="filePlus" size={16} />
           </button>
         )}
       </div>
       {p.filterBar}
       {p.notes.length === 0 && (
-        <div className="empty">
-          {p.narrowed
-            ? "No notes match the current search or filters."
-            : p.canCreate
-              ? "No notes. Click + to create one."
-              : "No notes yet."}
+        <div className="empty-state">
+          <Icon name={p.narrowed ? "search" : "note"} size={28} />
+          <div>
+            {p.narrowed
+              ? "No notes match the current search or filters."
+              : p.canCreate
+                ? "No notes here yet."
+                : "No notes yet."}
+          </div>
+          {!p.narrowed && p.canCreate && (
+            <button className="primary" onClick={p.onCreate}>
+              New note
+            </button>
+          )}
         </div>
       )}
       {p.notes.map((n) => (
@@ -79,18 +88,20 @@ export function NoteList(p: Props) {
                 p.onDelete(n.id, n.title || "Untitled");
               }}
             >
-              ×
+              <Icon name="trash" size={14} />
             </button>
           </div>
+          <div className="note-snippet">{plainSnippet(n.snippet) || "No content"}</div>
           <div className="note-meta">
             <span>{formatDate(n.updatedAt)}</span>
-            <span className="ellipsis">{plainSnippet(n.snippet)}</span>
+            {p.notebookNameById && (
+              <span className="nb-name ellipsis">
+                <Icon name="book" size={11} /> {p.notebookNameById.get(n.notebookId) ?? "?"}
+              </span>
+            )}
           </div>
-          {(n.tagIds.length > 0 || p.notebookNameById) && (
+          {n.tagIds.length > 0 && (
             <div className="note-tags">
-              {p.notebookNameById && (
-                <span className="nb-name">{p.notebookNameById.get(n.notebookId) ?? "?"}</span>
-              )}
               {n.tagIds.map((id) => {
                 const t = tagById.get(id);
                 return t ? <TagChip key={id} tag={t} /> : null;

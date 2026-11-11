@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "./Icon";
 
 export interface Item {
   id: string;
@@ -85,7 +86,7 @@ function Row({
         title="Delete"
         onClick={() => onDelete(item).catch((e) => onError(String(e)))}
       >
-        ×
+        <Icon name="trash" size={14} />
       </button>
     </div>
   );
@@ -119,7 +120,7 @@ export function ManageDialog(props: Props) {
         <div className="dialog-head">
           <h3>{props.title}</h3>
           <button className="icon-btn" onClick={props.onClose}>
-            ×
+            <Icon name="x" size={16} />
           </button>
         </div>
         {error && <div className="error">{error}</div>}

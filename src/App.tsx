@@ -16,6 +16,7 @@ import { SearchBar } from "./SearchBar";
 import { SidebarFilters } from "./SidebarFilters";
 import { activeCount, emptyFilters, type Filters } from "./filters";
 import { HelpDialog } from "./HelpDialog";
+import { Icon, type IconName } from "./Icon";
 import { handleShortcut, type ShortcutHandlers } from "./shortcuts";
 import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "./theme";
 import { ALL_NOTES, buildTree, computeMove, type DropPosition } from "./tree";
@@ -256,10 +257,11 @@ export default function App() {
         />
         <div className="sidebar-foot">
           <button onClick={cycleTheme} title="Switch theme: system / light / dark">
-            {{ system: "◐ System", light: "☀ Light", dark: "☾ Dark" }[themePref]}
+            <Icon name={{ system: "monitor", light: "sun", dark: "moon" }[themePref] as IconName} size={15} />
+            {{ system: "System", light: "Light", dark: "Dark" }[themePref]}
           </button>
-          <button onClick={() => setHelpOpen(true)} title="Keyboard shortcuts">
-            ?
+          <button onClick={() => setHelpOpen(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+            <Icon name="help" size={15} />
           </button>
         </div>
       </aside>
@@ -321,9 +323,15 @@ export default function App() {
             onError={setError}
           />
         ) : (
-          <p className="muted placeholder">
-            Select {isAll ? "a note" : "or create a note"}
-          </p>
+          <div className="empty-state placeholder">
+            <Icon name="note" size={40} />
+            <div>Select {isAll ? "a note" : "or create a note"}</div>
+            {!isAll && (
+              <button className="primary" onClick={createNote}>
+                New note
+              </button>
+            )}
+          </div>
         )}
       </main>
 

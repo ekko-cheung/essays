@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "./Icon";
 import { ALL_NOTES, type TreeNode, type DropPosition } from "./tree";
 
 interface Props {
@@ -104,8 +105,11 @@ export function NotebookTree(props: Props) {
                   toggle(n.id);
                 }}
               >
-                {n.children.length ? (isCollapsed ? "▸" : "▾") : ""}
+                {n.children.length > 0 && (
+                  <Icon name="chevron" size={12} className={isCollapsed ? "" : "open"} />
+                )}
               </span>
+              <Icon name="book" size={15} className="row-icon" />
               <span className="name">{n.name}</span>
               <span className="actions">
                 <button
@@ -120,7 +124,7 @@ export function NotebookTree(props: Props) {
                     setEditing(`new:${n.id}`);
                   }}
                 >
-                  +
+                  <Icon name="plus" size={14} />
                 </button>
                 <button
                   title="Delete"
@@ -129,7 +133,7 @@ export function NotebookTree(props: Props) {
                     props.onDelete(n.id, n.name);
                   }}
                 >
-                  ×
+                  <Icon name="trash" size={14} />
                 </button>
               </span>
             </div>
@@ -145,15 +149,17 @@ export function NotebookTree(props: Props) {
     <div className="tree">
       <div className="tree-header">
         <span>Notebooks</span>
-        <button title="New notebook" onClick={() => setEditing("new:root")}>
-          +
+        <button className="icon-btn" title="New notebook" onClick={() => setEditing("new:root")}>
+          <Icon name="plus" size={15} />
         </button>
       </div>
       <div
         className={`tree-row ${props.selectedId === ALL_NOTES ? "selected" : ""}`}
-        style={{ paddingLeft: 20 }}
+        style={{ paddingLeft: 4 }}
         onClick={() => props.onSelect(ALL_NOTES)}
       >
+        <span className="twisty" />
+        <Icon name="layers" size={15} className="row-icon" />
         <span className="name">All Notes</span>
       </div>
       {editing === "new:root" && renderInput("", (v) => props.onCreate(null, v), 0)}

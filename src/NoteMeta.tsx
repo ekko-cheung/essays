@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Status, Tag } from "./api";
+import { Icon } from "./Icon";
 
 export function TagChip({ tag, onRemove }: { tag: Tag; onRemove?: () => void }) {
   return (
@@ -7,7 +8,7 @@ export function TagChip({ tag, onRemove }: { tag: Tag; onRemove?: () => void }) 
       {tag.name}
       {onRemove && (
         <button title="Remove tag" onClick={onRemove}>
-          ×
+          <Icon name="x" size={12} />
         </button>
       )}
     </span>
@@ -70,6 +71,7 @@ export function NoteMeta(p: Props) {
         </select>
       </label>
       <div className="tag-area">
+        <Icon name="tag" size={14} className="tag-area-icon" />
         {attached.map((t) => (
           <TagChip
             key={t.id}
