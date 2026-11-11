@@ -142,6 +142,13 @@ export default function App() {
     if (seq === querySeq.current) setNotes(result);
   }, [query]);
 
+  // Status/tag counts depend on which notes exist, so notes being added or removed
+  // (including via a deleted notebook) must refresh them too.
+  const refreshNotesAndCounts = useCallback(
+    () => Promise.all([refreshNotes(), refreshStatuses(), refreshTags()]),
+    [refreshNotes, refreshStatuses, refreshTags],
+  );
+
   const changeFilters = (f: Filters) => {
     setFilters(f);
     try {
@@ -219,7 +226,7 @@ export default function App() {
       setSearch("");
       setDebouncedSearch("");
       changeFilters(emptyFilters(filters.includeSub));
-    }, refreshNotes);
+    }, refreshNotesAndCounts);
   };
 
   // One window listener for the whole app; the ref keeps it pointing at fresh closures.
@@ -348,7 +355,7 @@ export default function App() {
                 setNotebookId(ALL_NOTES);
                 setNoteId(null);
               }
-            }, refreshNotebooks);
+            }, () => Promise.all([refreshNotebooks(), refreshStatuses(), refreshTags()]));
           }}
           onDrop={onDrop}
         />
@@ -422,7 +429,7 @@ export default function App() {
           await run(async () => {
             await api.deleteNote(id);
             if (noteId === id) setNoteId(null);
-          }, refreshNotes);
+          }, refreshNotesAndCounts);
         }}
       />
 
