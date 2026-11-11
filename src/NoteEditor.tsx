@@ -6,7 +6,7 @@ import { NoteMeta } from "./NoteMeta";
 import { EVT_SAVE_NOW, EVT_VIEW_MODE, modLabel } from "./shortcuts";
 import { Icon } from "./Icon";
 
-type ViewMode = "edit" | "split" | "preview";
+type ViewMode = "live" | "edit" | "split" | "preview";
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
 const SAVE_DELAY_MS = 600;
@@ -36,9 +36,15 @@ export function NoteEditor({
   const [body, setBody] = useState(note.bodyMd);
   const [statusId, setStatusId] = useState(note.statusId);
   const [tagIds, setTagIds] = useState(note.tagIds);
-  const [mode, setMode] = useState<ViewMode>(
-    () => (localStorage.getItem("viewMode") as ViewMode) || "split",
-  );
+  const [mode, setMode] = useState<ViewMode>(() => {
+    try {
+      const v = localStorage.getItem("viewMode");
+      if (v === "live" || v === "edit" || v === "split" || v === "preview") return v;
+    } catch {
+      /* storage unavailable */
+    }
+    return "live";
+  });
   const [saveState, setSaveState] = useState<SaveState>("saved");
 
   const latest = useRef({ title: note.title, body: note.bodyMd });
@@ -153,7 +159,8 @@ export function NoteEditor({
         <div className="seg">
           {(
             [
-              ["edit", "pencil", "Editor"],
+              ["live", "sparkles", "Live preview"],
+              ["edit", "pencil", "Source"],
               ["split", "columns", "Split"],
               ["preview", "eye", "Preview"],
             ] as const
@@ -183,7 +190,9 @@ export function NoteEditor({
         {mode !== "preview" && (
           <div className="pane editor-pane">
             <MarkdownEditor
-              initialValue={note.bodyMd}
+              key={mode === "live" ? "live" : "src"}
+              live={mode === "live"}
+              initialValue={body}
               onChange={(v) => {
                 setBody(v);
                 latest.current.body = v;

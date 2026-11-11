@@ -6,6 +6,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
+import { livePreview } from "./livePreview";
 
 // Colors come from CSS variables so light/dark follow the app theme.
 const highlight = HighlightStyle.define([
@@ -41,11 +42,13 @@ const theme = EditorView.theme({
 
 interface Props {
   initialValue: string;
+  /** Render Markdown inline (Typora-style) instead of showing raw syntax. */
+  live?: boolean;
   onChange: (value: string) => void;
 }
 
 /** Uncontrolled: owns the document after mount. Remount (via `key`) to load another note. */
-export function MarkdownEditor({ initialValue, onChange }: Props) {
+export function MarkdownEditor({ initialValue, live = false, onChange }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -64,6 +67,7 @@ export function MarkdownEditor({ initialValue, onChange }: Props) {
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(highlight),
           theme,
+          ...(live ? livePreview : []),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           }),

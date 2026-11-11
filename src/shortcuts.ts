@@ -9,7 +9,7 @@ export const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: `${modLabel}+N`, action: "New note in the selected notebook" },
   { keys: `${modLabel}+F`, action: "Search notes" },
   { keys: `${modLabel}+S`, action: "Save now" },
-  { keys: `${modLabel}+1 / 2 / 3`, action: "Editor / split / preview" },
+  { keys: `${modLabel}+1 / 2 / 3 / 4`, action: "Live / source / split / preview" },
   { keys: `${modLabel}+,`, action: "Open settings" },
   { keys: `${modLabel}+/`, action: "Show this help" },
 ];
@@ -39,8 +39,9 @@ export function handleShortcut(e: KeyboardEvent, h: ShortcutHandlers): boolean {
     case "1":
     case "2":
     case "3":
+    case "4":
       window.dispatchEvent(
-        new CustomEvent(EVT_VIEW_MODE, { detail: (["edit", "split", "preview"] as const)[+e.key - 1] }),
+        new CustomEvent(EVT_VIEW_MODE, { detail: (["live", "edit", "split", "preview"] as const)[+e.key - 1] }),
       );
       break;
     case ",":
