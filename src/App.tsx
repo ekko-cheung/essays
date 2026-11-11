@@ -19,7 +19,8 @@ import { HelpDialog } from "./HelpDialog";
 import { Icon, type IconName } from "./Icon";
 import { handleShortcut, type ShortcutHandlers } from "./shortcuts";
 import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "./theme";
-import { ALL_NOTES, buildTree, computeMove, type DropPosition } from "./tree";
+import { ALL_NOTES, buildTree, computeMove, subtreeIds, type DropPosition } from "./tree";
+import { useConfirm } from "./confirm";
 import "./App.css";
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -33,6 +34,7 @@ function loadIncludeSub(): boolean {
 }
 
 export default function App() {
+  const confirm = useConfirm();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notebookId, setNotebookId] = useState<string>(ALL_NOTES);
   const [filters, setFilters] = useState<Filters>(() => emptyFilters(loadIncludeSub()));
@@ -223,28 +225,26 @@ export default function App() {
             }, refreshNotebooks)
           }
           onRename={(id, name) => run(() => api.renameNotebook(id, name), refreshNotebooks)}
-          onDelete={(id, name) => {
-            if (window.confirm(`Delete "${name}" and everything inside it?`)) {
-              run(async () => {
-                await api.deleteNotebook(id);
-                // Clear selection if it was inside the deleted subtree (or the notebook itself).
-                const doomed = new Set<string>([id]);
-                let grew = true;
-                while (grew) {
-                  grew = false;
-                  for (const n of notebooks) {
-                    if (n.parentId && doomed.has(n.parentId) && !doomed.has(n.id)) {
-                      doomed.add(n.id);
-                      grew = true;
-                    }
-                  }
-                }
-                if (doomed.has(notebookId)) {
-                  setNotebookId(ALL_NOTES);
-                  setNoteId(null);
-                }
-              }, refreshNotebooks);
-            }
+          onDelete={async (id, name) => {
+            const doomed = subtreeIds(notebooks, id);
+            const subs = doomed.size - 1;
+            const ok = await confirm({
+              title: `Delete notebook "${name}"?`,
+              message: `${
+                subs > 0 ? `Its ${subs} sub-notebook${subs > 1 ? "s" : ""} and all` : "All"
+              } notes inside will be deleted too. This can't be undone.`,
+              confirmLabel: "Delete",
+              danger: true,
+            });
+            if (!ok) return;
+            await run(async () => {
+              await api.deleteNotebook(id);
+              // Clear selection if it was inside the deleted subtree (or the notebook itself).
+              if (doomed.has(notebookId)) {
+                setNotebookId(ALL_NOTES);
+                setNoteId(null);
+              }
+            }, refreshNotebooks);
           }}
           onDrop={onDrop}
         />
@@ -287,13 +287,18 @@ export default function App() {
         selectedId={noteId}
         onSelect={setNoteId}
         onCreate={createNote}
-        onDelete={(id, title) => {
-          if (window.confirm(`Delete note "${title}"?`)) {
-            run(async () => {
-              await api.deleteNote(id);
-              if (noteId === id) setNoteId(null);
-            }, refreshNotes);
-          }
+        onDelete={async (id, title) => {
+          const ok = await confirm({
+            title: `Delete note "${title}"?`,
+            message: "This can't be undone.",
+            confirmLabel: "Delete",
+            danger: true,
+          });
+          if (!ok) return;
+          await run(async () => {
+            await api.deleteNote(id);
+            if (noteId === id) setNoteId(null);
+          }, refreshNotes);
         }}
       />
 
@@ -351,8 +356,15 @@ export default function App() {
             await refreshStatuses();
           }}
           onDelete={async (s) => {
-            const used = s.noteCount ? ` ${s.noteCount} note(s) will have no status.` : "";
-            if (!window.confirm(`Delete status "${s.name}"?${used}`)) return;
+            const ok = await confirm({
+              title: `Delete status "${s.name}"?`,
+              message: s.noteCount
+                ? `${s.noteCount} note${s.noteCount > 1 ? "s" : ""} using it will have no status.`
+                : "No notes are using this status.",
+              confirmLabel: "Delete",
+              danger: true,
+            });
+            if (!ok) return;
             await api.deleteStatus(s.id);
             await Promise.all([refreshStatuses(), refreshNotes()]);
           }}
@@ -374,8 +386,15 @@ export default function App() {
             await refreshTags();
           }}
           onDelete={async (t) => {
-            const used = t.noteCount ? ` It will be removed from ${t.noteCount} note(s).` : "";
-            if (!window.confirm(`Delete tag "${t.name}"?${used}`)) return;
+            const ok = await confirm({
+              title: `Delete tag "${t.name}"?`,
+              message: t.noteCount
+                ? `It will be removed from ${t.noteCount} note${t.noteCount > 1 ? "s" : ""}.`
+                : "No notes are using this tag.",
+              confirmLabel: "Delete",
+              danger: true,
+            });
+            if (!ok) return;
             await api.deleteTag(t.id);
             await Promise.all([refreshTags(), refreshNotes()]);
           }}

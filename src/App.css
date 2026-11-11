@@ -382,6 +382,29 @@ input:focus-visible, select:focus-visible { outline: none; }
 .manage-name:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .manage-count { min-width: 22px; text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
+/* Confirm dialog: stacks above other dialogs (e.g. Manage statuses). */
+.overlay.top { z-index: 30; }
+.dialog.confirm { width: 400px; padding: 20px 22px 18px; }
+.confirm-body { display: flex; gap: 14px; }
+.confirm-icon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 50%;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.confirm-icon.danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.confirm-text { min-width: 0; padding-top: 2px; }
+.confirm-text h3 { margin: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.confirm-text p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--fg-2); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.btn {
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 14px; cursor: pointer;
+  background: transparent; color: var(--fg); font-size: 13px;
+}
+.btn:hover { background: var(--hover); }
+.btn.danger { border-color: transparent; background: var(--danger); color: #fff; font-weight: 500; }
+.btn.danger:hover { filter: brightness(1.08); background: var(--danger); }
+:root[data-theme="dark"] .btn.danger { color: #1a0b0c; }
+
 .shortcut-table { width: 100%; border-collapse: collapse; }
 .shortcut-table td { padding: 9px 4px; border-bottom: 1px solid var(--border); color: var(--fg-2); }
 .shortcut-table tr:last-child td { border-bottom: none; }

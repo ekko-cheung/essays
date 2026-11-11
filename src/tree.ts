@@ -21,6 +21,22 @@ export function buildTree(flat: Notebook[]): TreeNode[] {
   return roots;
 }
 
+/** `rootId` plus the ids of every notebook nested under it. */
+export function subtreeIds(flat: Notebook[], rootId: string): Set<string> {
+  const ids = new Set<string>([rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of flat) {
+      if (n.parentId && ids.has(n.parentId) && !ids.has(n.id)) {
+        ids.add(n.id);
+        grew = true;
+      }
+    }
+  }
+  return ids;
+}
+
 export function isDescendantOrSelf(
   flat: Notebook[],
   ancestorId: string,
