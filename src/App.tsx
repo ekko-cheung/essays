@@ -12,7 +12,9 @@ import { NotebookTree } from "./NotebookTree";
 import { NoteList } from "./NoteList";
 import { NoteEditor } from "./NoteEditor";
 import { ManageDialog } from "./ManageDialog";
-import { FilterBar, activeCount, emptyFilters, type Filters } from "./FilterBar";
+import { SearchBar } from "./SearchBar";
+import { SidebarFilters } from "./SidebarFilters";
+import { activeCount, emptyFilters, type Filters } from "./filters";
 import { ALL_NOTES, buildTree, computeMove, type DropPosition } from "./tree";
 import "./App.css";
 
@@ -202,10 +204,13 @@ export default function App() {
           }}
           onDrop={onDrop}
         />
-        <div className="sidebar-foot">
-          <button onClick={() => setDialog("status")}>Statuses</button>
-          <button onClick={() => setDialog("tag")}>Tags</button>
-        </div>
+        <SidebarFilters
+          statuses={statuses}
+          tags={tags}
+          filters={filters}
+          onFilters={changeFilters}
+          onManage={setDialog}
+        />
       </aside>
 
       <NoteList
@@ -214,14 +219,12 @@ export default function App() {
         notebookNameById={isAll || filters.includeSub ? notebookNameById : null}
         narrowed={narrowed}
         filterBar={
-          <FilterBar
-            statuses={statuses}
-            tags={tags}
-            filters={filters}
+          <SearchBar
             search={search}
-            canIncludeSub={!isAll}
-            onFilters={changeFilters}
             onSearch={setSearch}
+            canIncludeSub={!isAll}
+            includeSub={filters.includeSub}
+            onIncludeSub={(v) => changeFilters({ ...filters, includeSub: v })}
           />
         }
         notes={notes}

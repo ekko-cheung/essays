@@ -111,38 +111,17 @@ body { margin: 0; background: var(--bg); }
   background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; outline: none;
 }
 .search-input:focus { border-color: var(--accent); }
-.filter-toggle {
-  border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted);
-  font-size: 12px; padding: 4px 8px; cursor: pointer; white-space: nowrap;
-}
-.filter-toggle.on { color: var(--fg); background: var(--hover); }
-.badge {
-  display: inline-block; margin-left: 5px; min-width: 16px; padding: 0 4px; border-radius: 8px;
-  background: var(--accent); color: #fff; font-size: 11px; text-align: center;
-}
-.filter-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
-.filter-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
-.hint { color: var(--muted); font-size: 11px; text-transform: none; letter-spacing: 0; }
-.filter-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.fchip {
-  padding: 1px 9px; border-radius: 999px; font-size: 12px; line-height: 1.6; cursor: pointer;
-  color: var(--fg); border: 1px solid var(--c); background: transparent;
-}
-.fchip:hover { background: color-mix(in srgb, var(--c) 15%, transparent); }
-.fchip.on { background: color-mix(in srgb, var(--c) 40%, transparent); font-weight: 600; }
-.filter-foot { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+.sub-toggle { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
 .link-btn { border: none; background: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; }
 .nb-name { font-size: 11px; color: var(--muted); padding: 1px 6px; border-radius: 4px; background: var(--hover); }
 
-/* ---- sidebar footer ---- */
-.sidebar { display: flex; flex-direction: column; overflow: hidden; }
-.sidebar .tree { flex: 1; overflow-y: auto; }
-.sidebar-foot { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
-.sidebar-foot button {
-  flex: 1; padding: 5px 0; border: 1px solid var(--border); border-radius: 6px;
-  background: transparent; color: var(--fg); cursor: pointer; font-size: 12px;
-}
-.sidebar-foot button:hover { background: var(--hover); }
+/* ---- sidebar: notebooks, then status / tag filters (whole sidebar scrolls) ---- */
+.sidebar { overflow-y: auto; }
+.side-section { padding: 8px 0; border-top: 1px solid var(--border); }
+.header-actions { display: inline-flex; align-items: center; gap: 6px; }
+.filter-row { padding-left: 16px; gap: 8px; }
+.filter-row .name { flex: 1; }
+.row-count { color: var(--muted); font-size: 12px; }
 
 /* ---- status dot, chips, meta bar ---- */
 .status-dot {
