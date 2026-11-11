@@ -1,0 +1,59 @@
+name: Release
+
+# Pushing a version tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`) builds the
+# app for macOS and Windows and attaches the installers to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release and upload assets
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest # Apple Silicon
+            args: --target aarch64-apple-darwin
+            rust_targets: aarch64-apple-darwin
+          - os: macos-latest # Intel
+            args: --target x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
+          - os: windows-latest
+            args: ""
+            rust_targets: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Essays ${{ github.ref_name }}
+          releaseBody: See the assets below to download the installer for your system.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
