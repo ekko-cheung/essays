@@ -1,4 +1,7 @@
+import type { Ref } from "react";
+
 interface Props {
+  inputRef: Ref<HTMLInputElement>;
   search: string;
   onSearch: (s: string) => void;
   /** Sub-notebook toggle only makes sense when a specific notebook is selected. */
@@ -7,11 +10,12 @@ interface Props {
   onIncludeSub: (v: boolean) => void;
 }
 
-export function SearchBar({ search, onSearch, canIncludeSub, includeSub, onIncludeSub }: Props) {
+export function SearchBar({ inputRef, search, onSearch, canIncludeSub, includeSub, onIncludeSub }: Props) {
   return (
     <div className="filter-bar">
       <div className="search-row">
         <input
+          ref={inputRef}
           className="search-input"
           value={search}
           placeholder="Search notes…"

@@ -3,6 +3,7 @@ import { api, type Note, type Status, type Tag } from "./api";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { NoteMeta } from "./NoteMeta";
+import { EVT_SAVE_NOW, EVT_VIEW_MODE } from "./shortcuts";
 
 type ViewMode = "edit" | "split" | "preview";
 type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -117,6 +118,20 @@ export function NoteEditor({
       /* storage unavailable: just don't remember */
     }
   };
+
+  // Global shortcuts (see shortcuts.ts): Mod+S saves now, Mod+1/2/3 switch the layout.
+  useEffect(() => {
+    const save = () => void flush();
+    const view = (e: Event) => setViewMode((e as CustomEvent<ViewMode>).detail);
+    window.addEventListener(EVT_SAVE_NOW, save);
+    window.addEventListener(EVT_VIEW_MODE, view);
+    return () => {
+      window.removeEventListener(EVT_SAVE_NOW, save);
+      window.removeEventListener(EVT_VIEW_MODE, view);
+    };
+    // setViewMode only touches state + localStorage, so it is safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flush]);
 
   return (
     <div className="note-editor">

@@ -15,6 +15,9 @@ import { ManageDialog } from "./ManageDialog";
 import { SearchBar } from "./SearchBar";
 import { SidebarFilters } from "./SidebarFilters";
 import { activeCount, emptyFilters, type Filters } from "./filters";
+import { HelpDialog } from "./HelpDialog";
+import { handleShortcut, type ShortcutHandlers } from "./shortcuts";
+import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "./theme";
 import { ALL_NOTES, buildTree, computeMove, type DropPosition } from "./tree";
 import "./App.css";
 
@@ -41,6 +44,9 @@ export default function App() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [dialog, setDialog] = useState<"status" | "tag" | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [themePref, setThemePrefState] = useState<ThemePref>(getThemePref);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const refreshStatuses = useCallback(async () => setStatuses(await api.listStatuses()), []);
   const refreshTags = useCallback(async () => setTags(await api.listTags()), []);
@@ -149,6 +155,43 @@ export default function App() {
     setNoteId(null);
   };
 
+  const createNote = () => {
+    if (isAll) {
+      setError("Select a notebook first to create a note in it.");
+      return;
+    }
+    void run(async () => {
+      const n = await api.createNote(notebookId);
+      setNoteId(n.id);
+      // A fresh note is Active/untagged/empty: clear any narrowing so it shows up.
+      setSearch("");
+      setDebouncedSearch("");
+      changeFilters(emptyFilters(filters.includeSub));
+    }, refreshNotes);
+  };
+
+  // One window listener for the whole app; the ref keeps it pointing at fresh closures.
+  const shortcutHandlers = useRef<ShortcutHandlers>(null!);
+  shortcutHandlers.current = {
+    newNote: createNote,
+    focusSearch: () => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    },
+    toggleHelp: () => setHelpOpen((v) => !v),
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => void handleShortcut(e, shortcutHandlers.current);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const cycleTheme = () => {
+    const next = nextThemePref(themePref);
+    setThemePref(next);
+    setThemePrefState(next);
+  };
+
   const onDrop = (dragId: string, targetId: string, pos: DropPosition) => {
     const move = computeMove(notebooks, dragId, targetId, pos);
     if (move) run(() => api.moveNotebook(dragId, move.newParentId, move.index), refreshNotebooks);
@@ -211,6 +254,14 @@ export default function App() {
           onFilters={changeFilters}
           onManage={setDialog}
         />
+        <div className="sidebar-foot">
+          <button onClick={cycleTheme} title="Switch theme: system / light / dark">
+            {{ system: "◐ System", light: "☀ Light", dark: "☾ Dark" }[themePref]}
+          </button>
+          <button onClick={() => setHelpOpen(true)} title="Keyboard shortcuts">
+            ?
+          </button>
+        </div>
       </aside>
 
       <NoteList
@@ -220,6 +271,7 @@ export default function App() {
         narrowed={narrowed}
         filterBar={
           <SearchBar
+            inputRef={searchRef}
             search={search}
             onSearch={setSearch}
             canIncludeSub={!isAll}
@@ -232,16 +284,7 @@ export default function App() {
         tags={tags}
         selectedId={noteId}
         onSelect={setNoteId}
-        onCreate={() =>
-          run(async () => {
-            const n = await api.createNote(notebookId);
-            setNoteId(n.id);
-            // A fresh note is Active/untagged/empty: clear any narrowing so it shows up.
-            setSearch("");
-            setDebouncedSearch("");
-            changeFilters(emptyFilters(filters.includeSub));
-          }, refreshNotes)
-        }
+        onCreate={createNote}
         onDelete={(id, title) => {
           if (window.confirm(`Delete note "${title}"?`)) {
             run(async () => {
@@ -284,6 +327,7 @@ export default function App() {
         )}
       </main>
 
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       {dialog === "status" && (
         <ManageDialog
           title="Statuses"

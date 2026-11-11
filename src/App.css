@@ -12,15 +12,15 @@
   background: var(--bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1d20;
-    --bg-side: #25272b;
-    --fg: #e6e8eb;
-    --muted: #7d828b;
-    --border: #35383d;
-    --hover: #30333a;
-  }
+/* Theme is resolved in JS (theme.ts) to data-theme="light|dark" on <html>,
+   so "system" and manual choices share one set of rules. */
+:root[data-theme="dark"] {
+  --bg: #1c1d20;
+  --bg-side: #25272b;
+  --fg: #e6e8eb;
+  --muted: #7d828b;
+  --border: #35383d;
+  --hover: #30333a;
 }
 
 * { box-sizing: border-box; }
@@ -90,16 +90,14 @@ body { margin: 0; background: var(--bg); }
   --tok-fn: #8250df;
   --tok-type: #953800;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --code-fg: #f08fd0;
-    --code-bg: #2a2c31;
-    --tok-keyword: #ff7b72;
-    --tok-string: #a5d6ff;
-    --tok-number: #79c0ff;
-    --tok-fn: #d2a8ff;
-    --tok-type: #ffa657;
-  }
+:root[data-theme="dark"] {
+  --code-fg: #f08fd0;
+  --code-bg: #2a2c31;
+  --tok-keyword: #ff7b72;
+  --tok-string: #a5d6ff;
+  --tok-number: #79c0ff;
+  --tok-fn: #d2a8ff;
+  --tok-type: #ffa657;
 }
 
 /* ---- search + filter ---- */
@@ -122,6 +120,24 @@ body { margin: 0; background: var(--bg); }
 .filter-row { padding-left: 16px; gap: 8px; }
 .filter-row .name { flex: 1; }
 .row-count { color: var(--muted); font-size: 12px; }
+.sidebar-foot {
+  position: sticky; bottom: 0; display: flex; gap: 6px; padding: 8px;
+  background: var(--bg-side); border-top: 1px solid var(--border);
+}
+.sidebar-foot button {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: transparent; color: var(--fg); cursor: pointer; font-size: 12px;
+}
+.sidebar-foot button:first-child { flex: 1; text-align: left; }
+.sidebar-foot button:hover { background: var(--hover); }
+
+.shortcut-table { width: 100%; border-collapse: collapse; }
+.shortcut-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); }
+.shortcut-table td:first-child { width: 150px; white-space: nowrap; }
+kbd {
+  font-family: var(--mono); font-size: 12px; padding: 2px 6px;
+  border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--bg-side);
+}
 
 /* ---- status dot, chips, meta bar ---- */
 .status-dot {

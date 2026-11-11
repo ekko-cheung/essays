@@ -18,10 +18,19 @@
         animation: spin 0.8s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      @media (prefers-color-scheme: dark) {
-        html, body { background: #1c1d20; }
-      }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #1c1d20; }
     </style>
+    <script>
+      // Same logic as src/theme.ts, run synchronously so the very first paint is themed.
+      (function () {
+        var pref = "system";
+        try { pref = localStorage.getItem("theme") || "system"; } catch (e) {}
+        var dark = pref === "dark" ||
+          (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      })();
+    </script>
   </head>
 
   <body>
