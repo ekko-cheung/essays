@@ -7,6 +7,15 @@ import { initTheme } from "./theme";
 
 initTheme();
 
+// The webview's default right-click menu (Reload, Back, Inspect…) has no place in a
+// release build. Keep it in dev, and keep Cut/Copy/Paste where text is editable.
+if (!import.meta.env.DEV) {
+  document.addEventListener("contextmenu", (e) => {
+    const t = e.target as HTMLElement | null;
+    if (!t?.closest("input, textarea, [contenteditable='true']")) e.preventDefault();
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ConfirmProvider>
