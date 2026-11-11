@@ -4,6 +4,7 @@ import { StatusDot, TagChip } from "./NoteMeta";
 import { Icon } from "./Icon";
 
 interface Props {
+  width: number;
   title: string;
   /** Notes can only be created inside a concrete notebook, not in "All Notes". */
   canCreate: boolean;
@@ -43,7 +44,7 @@ export function NoteList(p: Props) {
   const statusById = new Map(p.statuses.map((s) => [s.id, s]));
   const tagById = new Map(p.tags.map((t) => [t.id, t]));
   return (
-    <section className="note-list">
+    <section className="note-list" style={{ width: p.width }}>
       <div className="tree-header">
         <span className="ellipsis">{p.title}</span>
         <span className="count">{p.notes.length}</span>

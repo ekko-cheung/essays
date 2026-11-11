@@ -17,6 +17,7 @@ import { SearchBar } from "./SearchBar";
 import { SidebarFilters } from "./SidebarFilters";
 import { activeCount, emptyFilters, type Filters } from "./filters";
 import { HelpDialog } from "./HelpDialog";
+import { Resizer } from "./Resizer";
 import { SettingsDialog } from "./SettingsDialog";
 import { Icon, type IconName } from "./Icon";
 import { EVT_SAVE_NOW, handleShortcut, type ShortcutHandlers } from "./shortcuts";
@@ -35,6 +36,30 @@ function loadIncludeSub(): boolean {
   }
 }
 
+// Pane sizing. The editor keeps at least MAIN_MIN; the window minWidth in
+// tauri.conf.json is SIDEBAR.min + LIST.min + MAIN_MIN so the three always fit.
+const SIDEBAR = { key: "sidebarWidth", def: 252, min: 180 };
+const LIST = { key: "listWidth", def: 300, min: 220 };
+const MAIN_MIN = 360;
+
+function loadWidth(p: { key: string; def: number }): number {
+  try {
+    const n = Number(localStorage.getItem(p.key));
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch {
+    /* storage unavailable */
+  }
+  return p.def;
+}
+
+function saveWidth(key: string, w: number) {
+  try {
+    localStorage.setItem(key, String(w));
+  } catch {
+    /* just don't remember */
+  }
+}
+
 export default function App() {
   const confirm = useConfirm();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
@@ -50,6 +75,19 @@ export default function App() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [dialog, setDialog] = useState<"status" | "tag" | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [sidebarW, setSidebarW] = useState(() => loadWidth(SIDEBAR));
+  const [listW, setListW] = useState(() => loadWidth(LIST));
+  const [winW, setWinW] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  // Effective widths: never below the minimum, never squeezing the editor under its minimum.
+  const sidebarMax = winW - LIST.min - MAIN_MIN;
+  const sidebarWidth = Math.max(SIDEBAR.min, Math.min(sidebarW, sidebarMax));
+  const listMax = winW - sidebarWidth - MAIN_MIN;
+  const listWidth = Math.max(LIST.min, Math.min(listW, listMax));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -278,7 +316,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: sidebarWidth }}>
         <NotebookTree
           nodes={tree}
           selectedId={notebookId}
@@ -339,8 +377,20 @@ export default function App() {
           </button>
         </div>
       </aside>
+      <Resizer
+        width={sidebarWidth}
+        min={SIDEBAR.min}
+        max={sidebarMax}
+        defaultWidth={SIDEBAR.def}
+        label="Resize sidebar"
+        onChange={(w) => {
+          setSidebarW(w);
+          saveWidth(SIDEBAR.key, w);
+        }}
+      />
 
       <NoteList
+        width={listWidth}
         title={isAll ? "All Notes" : (notebook?.name ?? "")}
         canCreate={!isAll}
         notebookNameById={isAll || filters.includeSub ? notebookNameById : null}
@@ -373,6 +423,18 @@ export default function App() {
             await api.deleteNote(id);
             if (noteId === id) setNoteId(null);
           }, refreshNotes);
+        }}
+      />
+
+      <Resizer
+        width={listWidth}
+        min={LIST.min}
+        max={listMax}
+        defaultWidth={LIST.def}
+        label="Resize note list"
+        onChange={(w) => {
+          setListW(w);
+          saveWidth(LIST.key, w);
         }}
       />
 

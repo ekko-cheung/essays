@@ -15,7 +15,7 @@
         "title": "Essays",
         "width": 1100,
         "height": 720,
-        "minWidth": 640,
+        "minWidth": 780,
         "minHeight": 400,
         "dragDropEnabled": false,
         "visible": false,
