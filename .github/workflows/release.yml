@@ -13,6 +13,9 @@ jobs:
   release:
     strategy:
       fail-fast: false
+      # Each job merges its platform into latest.json, so run them one at a time
+      # to avoid two jobs overwriting each other's entry.
+      max-parallel: 1
       matrix:
         include:
           - os: macos-latest # Apple Silicon
@@ -37,6 +40,18 @@ jobs:
           node-version: lts/*
           cache: pnpm
 
+      # latest.json advertises the app version, so a vX.Y.Z tag must match
+      # tauri.conf.json — otherwise clients would never see the update.
+      - name: Check tag matches app version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app version $version"
+            exit 1
+          fi
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust_targets }}
@@ -50,6 +65,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater bundles. The public half lives in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Essays ${{ github.ref_name }}

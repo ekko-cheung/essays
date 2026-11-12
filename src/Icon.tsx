@@ -26,6 +26,7 @@ const PATHS = {
   refresh: "M21 12a9 9 0 0 0-9-9 9.8 9.8 0 0 0-6.7 2.8L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.8 9.8 0 0 0 6.7-2.8L21 16M16 16h5v5",
   sparkles: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8ZM5 3l.6 1.4L7 5l-1.4.6L5 7l-.6-1.4L3 5l1.4-.6Z",
   check: "M20 6 9 17l-5-5",
+  download: "M12 3v12M7 10l5 5 5-5M5 21h14",
 } as const;
 
 export type IconName = keyof typeof PATHS;

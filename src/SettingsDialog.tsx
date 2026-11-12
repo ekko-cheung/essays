@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { api, type CloseAction, type Settings, type SyncStatus } from "./api";
 import { Icon } from "./Icon";
 import { getThemePref, setThemePref, type ThemePref } from "./theme";
+import type { Updater } from "./updater";
 
 interface Props {
   settings: Settings;
   syncing: boolean;
+  updater: Updater;
   onSaved: (s: Settings) => void;
   onSyncNow: () => Promise<void>;
   onClose: () => void;
@@ -13,7 +15,7 @@ interface Props {
 
 const formatTime = (ms: number) => new Date(ms).toLocaleString();
 
-export function SettingsDialog({ settings, syncing, onSaved, onSyncNow, onClose }: Props) {
+export function SettingsDialog({ settings, syncing, updater, onSaved, onSyncNow, onClose }: Props) {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [closeAction, setCloseAction] = useState<CloseAction>(settings.closeAction);
   const [syncEnabled, setSyncEnabled] = useState(settings.syncEnabled);
@@ -235,6 +237,53 @@ export function SettingsDialog({ settings, syncing, onSaved, onSyncNow, onClose 
                 </span>
               </div>
             </div>
+          </section>
+
+          <section className="set-section">
+            <h4>Updates</h4>
+            <div className="update-row">
+              <div className="update-current">
+                <span>Version {updater.currentVersion || "…"}</span>
+                <small>Updates are downloaded from GitHub Releases.</small>
+              </div>
+              {updater.phase === "available" || updater.phase === "ready" ? (
+                <button className="btn" onClick={updater.open}>
+                  <Icon name="download" size={13} />
+                  {updater.phase === "ready" ? "Restart to finish" : "View update"}
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  disabled={
+                    updater.phase === "checking" ||
+                    updater.phase === "downloading" ||
+                    updater.phase === "installing"
+                  }
+                  onClick={() => void updater.check(true)}
+                >
+                  <Icon
+                    name="refresh"
+                    size={13}
+                    className={updater.phase === "checking" ? "spin" : ""}
+                  />
+                  {updater.phase === "checking" ? "Checking…" : "Check for updates"}
+                </button>
+              )}
+            </div>
+            <label className="check update-auto">
+              <input
+                type="checkbox"
+                checked={updater.autoCheck}
+                onChange={(e) => updater.setAutoCheck(e.target.checked)}
+              />
+              Check for updates automatically when the app starts
+            </label>
+            {updater.message && (
+              <p className="hint update-message">
+                <Icon name="check" size={13} /> {updater.message}
+              </p>
+            )}
+            {updater.error && <p className="hint update-error">{updater.error}</p>}
           </section>
         </div>
 

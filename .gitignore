@@ -25,3 +25,6 @@ dist-ssr
 
 # Rust workspace build output
 /target
+
+# Updater signing keys — never commit the private key.
+/.tauri

@@ -21,6 +21,8 @@ import { activeCount, emptyFilters, type Filters } from "./filters";
 import { HelpDialog } from "./HelpDialog";
 import { Resizer } from "./Resizer";
 import { SettingsDialog } from "./SettingsDialog";
+import { UpdateDialog } from "./UpdateDialog";
+import { useUpdater } from "./updater";
 import { Icon, type IconName } from "./Icon";
 import { EVT_SAVE_NOW, handleShortcut, type ShortcutHandlers } from "./shortcuts";
 import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "./theme";
@@ -108,6 +110,7 @@ export default function App() {
 
   // Show the splash/spinner until the first data is in, so the UI never flashes empty.
   const [ready, setReady] = useState(false);
+  const updater = useUpdater(ready);
   useEffect(() => {
     Promise.all([refreshNotebooks(), refreshStatuses(), refreshTags()])
       .catch((e) => setError(String(e)))
@@ -517,11 +520,13 @@ export default function App() {
         )}
       </main>
 
+      <UpdateDialog updater={updater} />
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       {settingsOpen && settings && (
         <SettingsDialog
           settings={settings}
           syncing={syncing}
+          updater={updater}
           onSaved={setSettings}
           onSyncNow={async () => void (await syncNow())}
           onClose={() => setSettingsOpen(false)}
