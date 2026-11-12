@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "essays"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "essays-core",
  "reqwest 0.12.28",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "essays-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rusqlite",
  "serde",
