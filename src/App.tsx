@@ -470,8 +470,19 @@ export default function App() {
 
       <main className="main">
         {error && (
-          <div className="error" onClick={() => setError(null)}>
-            {error}
+          <div className="error" role="alert" onClick={() => setError(null)}>
+            <div className="error-text">{error}</div>
+            <button
+              className="icon-btn error-close"
+              title="Dismiss"
+              aria-label="Dismiss error"
+              onClick={(e) => {
+                e.stopPropagation();
+                setError(null);
+              }}
+            >
+              <Icon name="x" size={14} />
+            </button>
           </div>
         )}
         {note ? (

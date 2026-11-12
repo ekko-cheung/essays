@@ -91,11 +91,14 @@ body:has(.resizer.active) { cursor: col-resize; user-select: none; }
 .icon { flex-shrink: 0; }
 
 .error {
-  margin: 10px 16px 0; padding: 8px 12px; border-radius: var(--radius); cursor: pointer;
-  font-size: 13px; color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 10px 16px 0; padding: 8px 6px 8px 12px; border-radius: var(--radius); cursor: pointer;
+  font-size: 13px; color: var(--danger); overflow-wrap: anywhere;
   border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
 }
+/* Break long unbroken tokens (URLs, JSON) so the banner can't widen the layout. */
+.error-text { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.error-close { flex-shrink: 0; color: var(--danger); }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
