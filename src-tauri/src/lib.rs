@@ -234,12 +234,12 @@ pub fn run() {
                 syncing: AtomicBool::new(false),
             });
 
-            // The window is created hidden and shown by the frontend once painted.
-            // If the frontend never gets that far (script error, etc.), don't leave
-            // the user with an invisible app.
+            // The window is created hidden and shown by the frontend as soon as
+            // it runs. If the frontend never gets that far (script error, etc.),
+            // don't leave the user with an invisible app.
             if let Some(window) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    std::thread::sleep(std::time::Duration::from_secs(2));
                     let _ = window.show();
                 });
             }

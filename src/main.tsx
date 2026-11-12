@@ -28,13 +28,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 // The window starts hidden (see tauri.conf.json) so the user never sees an empty
-// webview. Reveal it once the themed splash/app has actually been painted.
-requestAnimationFrame(() =>
-  requestAnimationFrame(() => {
-    try {
-      void getCurrentWindow().show();
-    } catch {
-      /* not running inside Tauri (e.g. plain browser dev): nothing to show */
-    }
-  }),
-);
+// webview. Reveal it as soon as this module runs: requestAnimationFrame is
+// suspended while the window is hidden, so gating on a paint callback left the
+// reveal to the backend's fallback timer (seconds of nothing to look at).
+// index.html has already parsed its themed splash by the time this runs.
+void getCurrentWindow()
+  .show()
+  .catch(() => {
+    /* not running inside Tauri (e.g. plain browser dev): nothing to show */
+  });
