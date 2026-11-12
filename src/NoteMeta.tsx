@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Status, Tag } from "./api";
 import { Icon } from "./Icon";
+import { Dropdown } from "./Dropdown";
 
 export function TagChip({ tag, onRemove }: { tag: Tag; onRemove?: () => void }) {
   return (
@@ -56,20 +57,15 @@ export function NoteMeta(p: Props) {
 
   return (
     <div className="note-meta-bar">
-      <label className="status-select">
-        <StatusDot status={status} />
-        <select
-          value={status ? status.id : ""}
-          onChange={(e) => p.onStatusChange(e.target.value || null)}
-        >
-          <option value="">No status</option>
-          {p.statuses.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Dropdown
+        ariaLabel="Status"
+        value={status ? status.id : ""}
+        options={[
+          { value: "", label: "No status", color: null },
+          ...p.statuses.map((s) => ({ value: s.id, label: s.name, color: s.color })),
+        ]}
+        onChange={(v) => p.onStatusChange(v || null)}
+      />
       <div className="tag-area">
         <Icon name="tag" size={14} className="tag-area-icon" />
         {attached.map((t) => (
