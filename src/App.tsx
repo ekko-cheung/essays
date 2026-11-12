@@ -7,8 +7,10 @@ import {
   type NoteQuery,
   type NoteSummary,
   type Status,
+  type SyncReport,
   type Tag,
 } from "./api";
+import { useToast } from "./toast";
 import { NotebookTree } from "./NotebookTree";
 import { NoteList } from "./NoteList";
 import { NoteEditor } from "./NoteEditor";
@@ -62,6 +64,7 @@ function saveWidth(key: string, w: number) {
 
 export default function App() {
   const confirm = useConfirm();
+  const toast = useToast();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notebookId, setNotebookId] = useState<string>(ALL_NOTES);
   const [filters, setFilters] = useState<Filters>(() => emptyFilters(loadIncludeSub()));
@@ -259,8 +262,9 @@ export default function App() {
   noteIdRef.current = noteId;
   const notebookIdRef = useRef(notebookId);
   notebookIdRef.current = notebookId;
-  const syncNow = useCallback(async () => {
-    if (syncing_.current) return;
+  /** Resolves to the report, or undefined if a sync was already running. */
+  const syncNow = useCallback(async (): Promise<SyncReport | undefined> => {
+    if (syncing_.current) return undefined;
     syncing_.current = true;
     setSyncing(true);
     try {
@@ -268,7 +272,7 @@ export default function App() {
       window.dispatchEvent(new Event(EVT_SAVE_NOW));
       await new Promise((r) => setTimeout(r, 50));
       const report = await api.syncNow();
-      if (report.pulled === 0) return;
+      if (report.pulled === 0) return report;
       const nbs = await api.listNotebooks();
       setNotebooks(nbs);
       if (notebookIdRef.current !== ALL_NOTES && !nbs.some((n) => n.id === notebookIdRef.current)) {
@@ -285,16 +289,35 @@ export default function App() {
           setNoteId(null); // deleted on another device
         }
       }
+      return report;
     } finally {
       syncing_.current = false;
       setSyncing(false);
     }
   }, [refreshNotes, refreshStatuses, refreshTags]);
 
+  // Background (auto) sync: silent on success, error banner on failure.
   const syncQuietly = useCallback(
     () => syncNow().catch((e) => setError(`Sync failed: ${String(e)}`)),
     [syncNow],
   );
+
+  // User clicked "Sync now": always tell them how it went.
+  const syncManually = useCallback(async () => {
+    try {
+      const report = await syncNow();
+      if (!report) return; // a sync was already in progress; its own result will show
+      const changed = report.pulled + report.pushed;
+      toast.success(
+        "Sync complete",
+        changed === 0
+          ? "Everything is up to date."
+          : `${report.pulled} downloaded, ${report.pushed} uploaded.`,
+      );
+    } catch (e) {
+      toast.error("Sync failed", String(e));
+    }
+  }, [syncNow, toast]);
 
   // Sync on launch and then on a timer while enabled.
   const autoSync = settings?.syncEnabled && settings.autoSync && settings.hasToken;
@@ -372,7 +395,7 @@ export default function App() {
             {{ system: "System", light: "Light", dark: "Dark" }[themePref]}
           </button>
           {settings?.syncEnabled && (
-            <button onClick={() => void syncQuietly()} title="Sync now" aria-label="Sync now" disabled={syncing}>
+            <button onClick={() => void syncManually()} title="Sync now" aria-label="Sync now" disabled={syncing}>
               <Icon name="refresh" size={15} className={syncing ? "spin" : ""} />
             </button>
           )}
@@ -489,7 +512,7 @@ export default function App() {
           settings={settings}
           syncing={syncing}
           onSaved={setSettings}
-          onSyncNow={syncNow}
+          onSyncNow={async () => void (await syncNow())}
           onClose={() => setSettingsOpen(false)}
         />
       )}

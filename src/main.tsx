@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import { ConfirmProvider } from "./confirm";
+import { ToastProvider } from "./toast";
 import { initTheme } from "./theme";
 
 initTheme();
@@ -18,9 +19,11 @@ if (!import.meta.env.DEV) {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <ConfirmProvider>
-      <App />
-    </ConfirmProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
+    </ToastProvider>
   </React.StrictMode>,
 );
 
