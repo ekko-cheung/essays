@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { Status, Tag } from "./api";
-import { Icon } from "./Icon";
-import { Dropdown } from "./Dropdown";
+import type { Status, Tag } from "../../api";
+import { Icon } from "../common/Icon";
+import { Dropdown } from "../common/Dropdown";
 
 export function TagChip({ tag, onRemove }: { tag: Tag; onRemove?: () => void }) {
   return (

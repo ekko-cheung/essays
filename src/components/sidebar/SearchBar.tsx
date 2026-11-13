@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import { Icon } from "./Icon";
+import { Icon } from "../common/Icon";
 
 interface Props {
   inputRef: Ref<HTMLInputElement>;

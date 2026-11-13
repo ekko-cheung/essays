@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Icon } from "./Icon";
-import { ALL_NOTES, type TreeNode, type DropPosition } from "./tree";
+import { Icon } from "../common/Icon";
+import { ALL_NOTES, type TreeNode, type DropPosition } from "../../lib/tree";
 
 interface Props {
   nodes: TreeNode[];

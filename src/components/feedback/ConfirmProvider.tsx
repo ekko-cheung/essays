@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Icon } from "./Icon";
+import { Icon } from "../common/Icon";
 
 export interface ConfirmOptions {
   title: string;

@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import App from "./App";
-import { ConfirmProvider } from "./confirm";
-import { ToastProvider } from "./toast";
-import { initTheme } from "./theme";
+import App from "./app/App";
+import { ConfirmProvider } from "./components/feedback/ConfirmProvider";
+import { ToastProvider } from "./components/feedback/ToastProvider";
+import { initTheme } from "./lib/theme";
 
 initTheme();
 

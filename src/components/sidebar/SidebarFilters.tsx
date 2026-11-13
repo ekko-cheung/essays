@@ -1,6 +1,6 @@
-import type { Status, Tag } from "./api";
-import { Icon } from "./Icon";
-import { activeCount, emptyFilters, toggleId, type Filters } from "./filters";
+import type { Status, Tag } from "../../api";
+import { Icon } from "../common/Icon";
+import { activeCount, emptyFilters, toggleId, type Filters } from "../../lib/filters";
 
 interface Props {
   statuses: Status[];

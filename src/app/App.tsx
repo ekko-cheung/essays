@@ -9,25 +9,25 @@ import {
   type Status,
   type SyncReport,
   type Tag,
-} from "./api";
-import { useToast } from "./toast";
-import { NotebookTree } from "./NotebookTree";
-import { NoteList } from "./NoteList";
-import { NoteEditor } from "./NoteEditor";
-import { ManageDialog } from "./ManageDialog";
-import { SearchBar } from "./SearchBar";
-import { SidebarFilters } from "./SidebarFilters";
-import { activeCount, emptyFilters, type Filters } from "./filters";
-import { HelpDialog } from "./HelpDialog";
-import { Resizer } from "./Resizer";
-import { SettingsDialog } from "./SettingsDialog";
-import { UpdateDialog } from "./UpdateDialog";
-import { useUpdater } from "./updater";
-import { Icon, type IconName } from "./Icon";
-import { EVT_SAVE_NOW, handleShortcut, type ShortcutHandlers } from "./shortcuts";
-import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "./theme";
-import { ALL_NOTES, buildTree, computeMove, subtreeIds, type DropPosition } from "./tree";
-import { useConfirm } from "./confirm";
+} from "../api";
+import { useToast } from "../components/feedback/ToastProvider";
+import { useConfirm } from "../components/feedback/ConfirmProvider";
+import { NotebookTree } from "../components/sidebar/NotebookTree";
+import { SearchBar } from "../components/sidebar/SearchBar";
+import { SidebarFilters } from "../components/sidebar/SidebarFilters";
+import { NoteList } from "../components/notes/NoteList";
+import { NoteEditor } from "../components/notes/NoteEditor";
+import { ManageDialog } from "../components/dialogs/ManageDialog";
+import { HelpDialog } from "../components/dialogs/HelpDialog";
+import { Resizer } from "../components/common/Resizer";
+import { SettingsDialog } from "../components/dialogs/SettingsDialog";
+import { UpdateDialog } from "../components/dialogs/UpdateDialog";
+import { useUpdater } from "../hooks/useUpdater";
+import { activeCount, emptyFilters, type Filters } from "../lib/filters";
+import { Icon, type IconName } from "../components/common/Icon";
+import { EVT_SAVE_NOW, handleShortcut, type ShortcutHandlers } from "../lib/shortcuts";
+import { getThemePref, nextThemePref, setThemePref, type ThemePref } from "../lib/theme";
+import { ALL_NOTES, buildTree, computeMove, subtreeIds, type DropPosition } from "../lib/tree";
 import "./App.css";
 
 const SEARCH_DEBOUNCE_MS = 250;

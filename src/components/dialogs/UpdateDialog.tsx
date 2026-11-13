@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { Icon } from "./Icon";
-import { MarkdownPreview } from "./MarkdownPreview";
-import type { Updater } from "./updater";
+import { Icon } from "../common/Icon";
+import { MarkdownPreview } from "../editor/MarkdownPreview";
+import type { Updater } from "../../hooks/useUpdater";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

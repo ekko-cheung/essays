@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Icon } from "./Icon";
+import { Icon } from "../common/Icon";
 
 type ToastKind = "success" | "error";
 

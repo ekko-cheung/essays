@@ -1,4 +1,4 @@
-import type { Notebook } from "./api";
+import type { Notebook } from "../api";
 
 export interface TreeNode extends Notebook {
   children: TreeNode[];

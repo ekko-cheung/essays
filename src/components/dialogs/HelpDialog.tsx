@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { Icon } from "./Icon";
-import { SHORTCUTS } from "./shortcuts";
+import { Icon } from "../common/Icon";
+import { SHORTCUTS } from "../../lib/shortcuts";
 
 export function HelpDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {

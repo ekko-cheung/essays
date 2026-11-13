@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { api, type CloseAction, type Settings, type SyncStatus } from "./api";
-import { Icon } from "./Icon";
-import { getThemePref, setThemePref, type ThemePref } from "./theme";
-import type { Updater } from "./updater";
+import { api, type CloseAction, type Settings, type SyncStatus } from "../../api";
+import { Icon } from "../common/Icon";
+import { getThemePref, setThemePref, type ThemePref } from "../../lib/theme";
+import type { Updater } from "../../hooks/useUpdater";
 
 interface Props {
   settings: Settings;

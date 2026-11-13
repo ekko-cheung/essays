@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import type { NoteSummary, Status, Tag } from "./api";
+import type { NoteSummary, Status, Tag } from "../../api";
 import { StatusDot, TagChip } from "./NoteMeta";
-import { Icon } from "./Icon";
+import { Icon } from "../common/Icon";
 
 interface Props {
   width: number;

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Note, type Status, type Tag } from "./api";
-import { MarkdownEditor } from "./MarkdownEditor";
-import { MarkdownPreview } from "./MarkdownPreview";
+import { api, type Note, type Status, type Tag } from "../../api";
+import { MarkdownEditor } from "../editor/MarkdownEditor";
+import { MarkdownPreview } from "../editor/MarkdownPreview";
 import { NoteMeta } from "./NoteMeta";
-import { EVT_SAVE_NOW, EVT_VIEW_MODE, modLabel } from "./shortcuts";
-import { Icon } from "./Icon";
+import { EVT_SAVE_NOW, EVT_VIEW_MODE, modLabel } from "../../lib/shortcuts";
+import { Icon } from "../common/Icon";
 
 type ViewMode = "live" | "edit" | "split" | "preview";
 type SaveState = "saved" | "dirty" | "saving" | "error";
