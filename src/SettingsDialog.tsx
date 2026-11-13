@@ -127,8 +127,8 @@ export function SettingsDialog({ settings, syncing, updater, onSaved, onSyncNow,
                     onChange={() => setCloseAction("minimize")}
                   />
                   <span>
-                    Minimize
-                    <small>Closing the window minimizes it; the app keeps running (and syncing).</small>
+                    Minimize to tray
+                    <small>Closing the window hides it to the system tray; the app keeps running (and syncing) while this is on.</small>
                   </span>
                 </label>
               </div>

@@ -21,12 +21,82 @@ struct AppState {
     settings: Mutex<Settings>,
     settings_path: PathBuf,
     syncing: AtomicBool,
+    /// Set when the user closes the window to the tray, so the startup
+    /// "make sure the window is visible" fallback doesn't pop it back up.
+    hidden_to_tray: AtomicBool,
 }
 
 type CmdResult<T> = Result<T, String>;
 
 fn err(e: essays_core::Error) -> String {
     e.to_string()
+}
+
+#[cfg(desktop)]
+const TRAY_ID: &str = "essays-tray";
+
+/// Brings the main window back from the tray, unminimized and focused.
+#[cfg(desktop)]
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Creates the tray icon with an "Open" / "Quit" menu. Left-clicking the icon
+/// (Windows and macOS) restores the window; the menu opens on right click.
+#[cfg(desktop)]
+fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+    let open = MenuItem::with_id(app, "open", "Open Essays", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Essays", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
+        .tooltip("Essays")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+
+    builder.build(app)?;
+    Ok(())
+}
+
+/// Adds or removes the tray icon to match the close action: it only exists
+/// while closing the window hides the app to the tray.
+#[cfg(desktop)]
+fn set_tray_enabled(app: &tauri::AppHandle, enabled: bool) -> tauri::Result<()> {
+    let id = tauri::tray::TrayIconId::new(TRAY_ID);
+    let exists = app.tray_by_id(&id).is_some();
+    if enabled && !exists {
+        setup_tray(app)?;
+    } else if !enabled && exists {
+        // Dropping the handle returned by `remove_tray_by_id` removes the icon.
+        let _ = app.remove_tray_by_id(&id);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -170,13 +240,34 @@ fn get_settings(state: State<AppState>) -> SettingsView {
 }
 
 #[tauri::command]
-fn save_settings(state: State<AppState>, input: SettingsInput) -> CmdResult<SettingsView> {
+fn save_settings(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    input: SettingsInput,
+) -> CmdResult<SettingsView> {
     let mut s = state.settings.lock().unwrap();
     let mut next = s.clone();
     next.apply(input);
     next.save(&state.settings_path)?;
     *s = next;
-    Ok(SettingsView::from(&*s))
+    let view = SettingsView::from(&*s);
+    #[cfg(desktop)]
+    let close_to_tray = s.close_action == CloseAction::MinimizeToTray;
+    drop(s);
+
+    // The tray icon only exists while closing to the tray is enabled. Menu and
+    // tray creation must happen on the main thread.
+    #[cfg(desktop)]
+    {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Err(e) = set_tray_enabled(&handle, close_to_tray) {
+                eprintln!("failed to update the tray icon: {e}");
+            }
+        });
+    }
+
+    Ok(view)
 }
 
 #[derive(Serialize)]
@@ -227,12 +318,22 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let db = Db::open(dir.join("essays.db"))?;
             let settings_path = dir.join("settings.json");
+            let settings = Settings::load(&settings_path);
+            #[cfg(desktop)]
+            let close_to_tray = settings.close_action == CloseAction::MinimizeToTray;
             app.manage(AppState {
                 db: Mutex::new(db),
-                settings: Mutex::new(Settings::load(&settings_path)),
+                settings: Mutex::new(settings),
                 settings_path,
                 syncing: AtomicBool::new(false),
+                hidden_to_tray: AtomicBool::new(false),
             });
+
+            // Only show a tray icon when closing the window hides the app there.
+            #[cfg(desktop)]
+            if let Err(e) = set_tray_enabled(app.handle(), close_to_tray) {
+                eprintln!("failed to create the tray icon: {e}");
+            }
 
             // The window is created hidden and shown by the frontend as soon as
             // it runs. If the frontend never gets that far (script error, etc.),
@@ -240,7 +341,15 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(2));
-                    let _ = window.show();
+                    // Unless the user already closed it to the tray, in which
+                    // case popping it back up would be unwanted.
+                    if !window
+                        .state::<AppState>()
+                        .hidden_to_tray
+                        .load(Ordering::SeqCst)
+                    {
+                        let _ = window.show();
+                    }
                 });
             }
             Ok(())
@@ -248,9 +357,30 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let minimize = window.state::<AppState>().settings.lock().unwrap().close_action
-                    == CloseAction::Minimize;
+                    == CloseAction::MinimizeToTray;
                 if minimize {
                     api.prevent_close();
+                    #[cfg(desktop)]
+                    {
+                        window
+                            .state::<AppState>()
+                            .hidden_to_tray
+                            .store(true, Ordering::SeqCst);
+                        let tray = window
+                            .app_handle()
+                            .tray_by_id(&tauri::tray::TrayIconId::new(TRAY_ID))
+                            .is_some();
+                        if tray {
+                            // Hiding (rather than minimizing) drops the taskbar
+                            // button, so the app lives in the tray only.
+                            let _ = window.hide();
+                        } else {
+                            // No tray available (e.g. no appindicator on Linux):
+                            // fall back to the taskbar so the window is reachable.
+                            let _ = window.minimize();
+                        }
+                    }
+                    #[cfg(not(desktop))]
                     let _ = window.minimize();
                 }
             }
@@ -282,6 +412,14 @@ pub fn run() {
             sync_test,
             sync_now
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Clicking the Dock icon on macOS should restore a window that was
+            // closed to the tray.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                show_main_window(_app);
+            }
+        });
 }

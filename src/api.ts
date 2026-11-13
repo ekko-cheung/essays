@@ -54,6 +54,7 @@ export interface Tag {
   noteCount: number;
 }
 
+/** `"minimize"` hides the window to the system tray instead of closing it. */
 export type CloseAction = "quit" | "minimize";
 
 export interface Settings {
