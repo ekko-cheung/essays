@@ -40,11 +40,25 @@ impl Default for SyncSettings {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub close_action: CloseAction,
+    /// Insert matching closers for brackets and fenced code blocks while typing.
+    pub auto_close_brackets: bool,
     pub sync: SyncSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            close_action: CloseAction::default(),
+            // On by default; settings files written before this option existed
+            // also get the feature when deserialized.
+            auto_close_brackets: true,
+            sync: SyncSettings::default(),
+        }
+    }
 }
 
 impl Settings {
@@ -75,6 +89,7 @@ impl Settings {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     pub close_action: CloseAction,
+    pub auto_close_brackets: bool,
     pub sync_enabled: bool,
     pub account_id: String,
     pub database_id: String,
@@ -87,6 +102,7 @@ impl From<&Settings> for SettingsView {
     fn from(s: &Settings) -> Self {
         Self {
             close_action: s.close_action,
+            auto_close_brackets: s.auto_close_brackets,
             sync_enabled: s.sync.enabled,
             account_id: s.sync.account_id.clone(),
             database_id: s.sync.database_id.clone(),
@@ -101,6 +117,7 @@ impl From<&Settings> for SettingsView {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsInput {
     pub close_action: CloseAction,
+    pub auto_close_brackets: bool,
     pub sync_enabled: bool,
     pub account_id: String,
     pub database_id: String,
@@ -113,6 +130,7 @@ pub struct SettingsInput {
 impl Settings {
     pub fn apply(&mut self, i: SettingsInput) {
         self.close_action = i.close_action;
+        self.auto_close_brackets = i.auto_close_brackets;
         self.sync.enabled = i.sync_enabled;
         self.sync.account_id = i.account_id.trim().to_string();
         self.sync.database_id = i.database_id.trim().to_string();
@@ -121,5 +139,36 @@ impl Settings {
         }
         self.sync.auto_sync = i.auto_sync;
         self.sync.interval_minutes = i.interval_minutes.clamp(1, 24 * 60);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_close_defaults_to_on_for_new_and_old_settings() {
+        assert!(Settings::default().auto_close_brackets);
+        // A file written before the option existed should still get the feature.
+        let old: Settings =
+            serde_json::from_str(r#"{"closeAction":"minimize","sync":{"enabled":true}}"#).unwrap();
+        assert_eq!(old.close_action, CloseAction::MinimizeToTray);
+        assert!(old.auto_close_brackets);
+    }
+
+    #[test]
+    fn apply_updates_auto_close() {
+        let mut settings = Settings::default();
+        settings.apply(SettingsInput {
+            close_action: CloseAction::Quit,
+            auto_close_brackets: false,
+            sync_enabled: false,
+            account_id: String::new(),
+            database_id: String::new(),
+            api_token: None,
+            auto_sync: true,
+            interval_minutes: 5,
+        });
+        assert!(!settings.auto_close_brackets);
     }
 }

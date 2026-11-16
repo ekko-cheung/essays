@@ -18,6 +18,7 @@ const formatTime = (ms: number) => new Date(ms).toLocaleString();
 export function SettingsDialog({ settings, syncing, updater, onSaved, onSyncNow, onClose }: Props) {
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [closeAction, setCloseAction] = useState<CloseAction>(settings.closeAction);
+  const [autoCloseBrackets, setAutoCloseBrackets] = useState(settings.autoCloseBrackets);
   const [syncEnabled, setSyncEnabled] = useState(settings.syncEnabled);
   const [accountId, setAccountId] = useState(settings.accountId);
   const [databaseId, setDatabaseId] = useState(settings.databaseId);
@@ -44,6 +45,7 @@ export function SettingsDialog({ settings, syncing, updater, onSaved, onSyncNow,
   const save = async () => {
     const saved = await api.saveSettings({
       closeAction,
+      autoCloseBrackets,
       syncEnabled,
       accountId,
       databaseId,
@@ -103,6 +105,21 @@ export function SettingsDialog({ settings, syncing, updater, onSaved, onSyncNow,
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
+            </div>
+            <div className="field">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={autoCloseBrackets}
+                  onChange={(e) => setAutoCloseBrackets(e.target.checked)}
+                />
+                Auto-close brackets and code fences
+              </label>
+              <p className="hint">
+                Typing <code>(</code>, <code>[</code>, or <code>{"{"}</code> inserts the matching
+                closer, and a third backtick at the start of a line adds the closing fence. Type the
+                closing symbol to skip over it; press Backspace to remove an auto-inserted pair.
+              </p>
             </div>
             <div className="field">
               <label>When closing the window</label>

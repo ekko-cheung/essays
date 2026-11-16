@@ -494,6 +494,7 @@ export default function App() {
             note={note}
             statuses={statuses}
             tags={tags}
+            autoCloseBrackets={settings?.autoCloseBrackets ?? true}
             onSaved={() => void refreshNotes().catch((e) => setError(String(e)))}
             onMetaChanged={() =>
               void Promise.all([refreshNotes(), refreshStatuses(), refreshTags()]).catch((e) =>

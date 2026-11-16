@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, drawSelection, placeholder } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
+import { autoCloseExtensions } from "./autoClose";
 import { livePreview } from "./livePreview";
 
 // Colors come from CSS variables so light/dark follow the app theme.
@@ -44,12 +45,16 @@ interface Props {
   initialValue: string;
   /** Render Markdown inline (Typora-style) instead of showing raw syntax. */
   live?: boolean;
+  /** Insert matching closers for brackets and fenced code blocks. */
+  autoClose?: boolean;
   onChange: (value: string) => void;
 }
 
 /** Uncontrolled: owns the document after mount. Remount (via `key`) to load another note. */
-export function MarkdownEditor({ initialValue, live = false, onChange }: Props) {
+export function MarkdownEditor({ initialValue, live = false, autoClose = true, onChange }: Props) {
   const host = useRef<HTMLDivElement>(null);
+  const editor = useRef<EditorView | null>(null);
+  const autoCloseCompartment = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -67,6 +72,7 @@ export function MarkdownEditor({ initialValue, live = false, onChange }: Props) 
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(highlight),
           theme,
+          autoCloseCompartment.current.of(autoCloseExtensions(autoClose)),
           ...(live ? livePreview : []),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChangeRef.current(u.state.doc.toString());
@@ -74,10 +80,22 @@ export function MarkdownEditor({ initialValue, live = false, onChange }: Props) 
         ],
       }),
     });
-    return () => view.destroy();
+    editor.current = view;
+    return () => {
+      editor.current = null;
+      view.destroy();
+    };
     // initialValue intentionally read once: the editor owns the doc afterwards.
+    // live is fixed by the remount key in NoteEditor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The setting can change while a note is open; reconfigure without a remount.
+  useEffect(() => {
+    editor.current?.dispatch({
+      effects: autoCloseCompartment.current.reconfigure(autoCloseExtensions(autoClose)),
+    });
+  }, [autoClose]);
 
   return <div className="cm-host" ref={host} />;
 }

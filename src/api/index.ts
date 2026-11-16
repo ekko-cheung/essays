@@ -59,6 +59,8 @@ export type CloseAction = "quit" | "minimize";
 
 export interface Settings {
   closeAction: CloseAction;
+  /** Insert matching closers for brackets and fenced code blocks while typing. */
+  autoCloseBrackets: boolean;
   syncEnabled: boolean;
   accountId: string;
   databaseId: string;

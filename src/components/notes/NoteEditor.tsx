@@ -15,6 +15,8 @@ interface Props {
   note: Note;
   statuses: Status[];
   tags: Tag[];
+  /** Settings → General: insert matching brackets and code fences. */
+  autoCloseBrackets: boolean;
   onSaved: () => void;
   /** Status/tags changed: lists and counts elsewhere need a refresh. */
   onMetaChanged: () => void;
@@ -27,6 +29,7 @@ export function NoteEditor({
   note,
   statuses,
   tags,
+  autoCloseBrackets,
   onSaved,
   onMetaChanged,
   onCreateTag,
@@ -192,6 +195,7 @@ export function NoteEditor({
             <MarkdownEditor
               key={mode === "live" ? "live" : "src"}
               live={mode === "live"}
+              autoClose={autoCloseBrackets}
               initialValue={body}
               onChange={(v) => {
                 setBody(v);
