@@ -17,4 +17,4 @@ export const activeCount = (f: Filters) =>
   f.statusIds.length + (f.noStatus ? 1 : 0) + f.tagIds.length;
 
 export const toggleId = (list: string[], id: string) =>
-  list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  list.includes(id) ? list.filter((x) => x !== id) : [id];
