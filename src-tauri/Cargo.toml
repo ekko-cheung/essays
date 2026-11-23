@@ -1,6 +1,6 @@
 [package]
 name = "essays"
-version = "0.4.0"
+version = "0.4.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
@@ -25,7 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
+tokio = { version = "1", features = ["time"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

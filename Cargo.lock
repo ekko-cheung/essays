@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "essays"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "essays-core",
  "reqwest 0.12.28",
@@ -1001,13 +1001,13 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
- "tauri-plugin-process",
  "tauri-plugin-updater",
+ "tokio",
 ]
 
 [[package]]
 name = "essays-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "rusqlite",
  "serde",
@@ -4221,16 +4221,6 @@ dependencies = [
  "url",
  "windows",
  "zbus",
-]
-
-[[package]]
-name = "tauri-plugin-process"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74ae3d8549ae564c0397377373e262f340908eb23a5b9fbe03f2a00007dc0038"
-dependencies = [
- "tauri",
- "tauri-plugin",
 ]
 
 [[package]]

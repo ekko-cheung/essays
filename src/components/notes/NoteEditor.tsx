@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { api, type Note, type Status, type Tag } from "../../api";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { MarkdownPreview } from "../editor/MarkdownPreview";
@@ -11,7 +11,12 @@ type SaveState = "saved" | "dirty" | "saving" | "error";
 
 const SAVE_DELAY_MS = 600;
 
+export interface NoteEditorHandle {
+  flush: () => Promise<boolean>;
+}
+
 interface Props {
+  ref?: Ref<NoteEditorHandle>;
   note: Note;
   statuses: Status[];
   tags: Tag[];
@@ -26,6 +31,7 @@ interface Props {
 
 /** Mounted once per note (parent uses key={note.id}); owns the draft and autosaves it. */
 export function NoteEditor({
+  ref,
   note,
   statuses,
   tags,
@@ -52,27 +58,40 @@ export function NoteEditor({
 
   const latest = useRef({ title: note.title, body: note.bodyMd });
   const dirty = useRef(false);
+  const saving = useRef<Promise<boolean> | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const callbacks = useRef({ onSaved, onError });
   callbacks.current = { onSaved, onError };
 
-  const flush = useCallback(async () => {
+  const flush = useCallback((): Promise<boolean> => {
     window.clearTimeout(timer.current);
-    if (!dirty.current) return;
-    dirty.current = false;
+    if (saving.current) return saving.current;
+    if (!dirty.current) return Promise.resolve(true);
     setSaveState("saving");
-    const { title, body } = latest.current;
-    try {
-      await api.updateNote(note.id, title, body);
-      // If more edits arrived while saving, a new timer is already pending.
-      if (!dirty.current) setSaveState("saved");
-      callbacks.current.onSaved();
-    } catch (e) {
-      dirty.current = true;
-      setSaveState("error");
-      callbacks.current.onError(String(e));
-    }
+    const save = async () => {
+      try {
+        while (dirty.current) {
+          dirty.current = false;
+          const { title, body } = latest.current;
+          await api.updateNote(note.id, title, body);
+        }
+        setSaveState("saved");
+        callbacks.current.onSaved();
+        return true;
+      } catch (e) {
+        dirty.current = true;
+        setSaveState("error");
+        callbacks.current.onError(String(e));
+        return false;
+      }
+    };
+    saving.current = save().finally(() => {
+      saving.current = null;
+    });
+    return saving.current;
   }, [note.id]);
+
+  useImperativeHandle(ref, () => ({ flush }), [flush]);
 
   const schedule = useCallback(() => {
     dirty.current = true;

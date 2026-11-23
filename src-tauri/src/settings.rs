@@ -10,7 +10,7 @@ pub enum CloseAction {
     /// Closing the window quits the app.
     #[default]
     Quit,
-    /// Closing the window hides it to the system tray; the app keeps running.
+    /// The app keeps running in the system tray after the window closes.
     /// The serialized name stays `minimize` so existing settings files keep working.
     #[serde(rename = "minimize")]
     MinimizeToTray,

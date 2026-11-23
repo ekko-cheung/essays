@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { check as checkUpdate, type Update } from "@tauri-apps/plugin-updater";
+import { api } from "../api";
 
 const AUTO_CHECK_KEY = "autoCheckUpdates";
 const DISMISSED_KEY = "dismissedUpdateVersion";
@@ -185,7 +185,7 @@ export function useUpdater(ready: boolean): Updater {
 
   const restart = useCallback(async () => {
     try {
-      await relaunch();
+      await api.restartAfterUpdate();
     } catch (e) {
       setError(String(e));
     }

@@ -14,6 +14,8 @@ use std::sync::Mutex;
 use tauri::{Manager, State};
 
 mod cloud;
+#[cfg(target_os = "macos")]
+mod macos_tray;
 mod settings;
 
 struct AppState {
@@ -21,9 +23,38 @@ struct AppState {
     settings: Mutex<Settings>,
     settings_path: PathBuf,
     syncing: AtomicBool,
-    /// Set when the user closes the window to the tray, so the startup
-    /// "make sure the window is visible" fallback doesn't pop it back up.
-    hidden_to_tray: AtomicBool,
+    /// Prevent the startup visibility fallback from undoing a minimize.
+    minimized_on_close: AtomicBool,
+    #[cfg(desktop)]
+    tray_sync: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    #[cfg(all(desktop, not(target_os = "macos")))]
+    reopen_window: Mutex<()>,
+}
+
+impl AppState {
+    fn closes_to_tray(&self) -> bool {
+        self.settings.lock().unwrap().close_action == CloseAction::MinimizeToTray
+    }
+}
+
+fn initialize_state(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = app.path().app_data_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let db = Db::open(dir.join("essays.db"))?;
+    let settings_path = dir.join("settings.json");
+    let settings = Settings::load(&settings_path);
+    app.manage(AppState {
+        db: Mutex::new(db),
+        settings: Mutex::new(settings),
+        settings_path,
+        syncing: AtomicBool::new(false),
+        minimized_on_close: AtomicBool::new(false),
+        #[cfg(desktop)]
+        tray_sync: Mutex::new(None),
+        #[cfg(all(desktop, not(target_os = "macos")))]
+        reopen_window: Mutex::new(()),
+    });
+    Ok(())
 }
 
 type CmdResult<T> = Result<T, String>;
@@ -32,21 +63,56 @@ fn err(e: essays_core::Error) -> String {
     e.to_string()
 }
 
+const MAIN_WINDOW_LABEL: &str = "main";
 #[cfg(desktop)]
 const TRAY_ID: &str = "essays-tray";
 
-/// Brings the main window back from the tray, unminimized and focused.
 #[cfg(desktop)]
-fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
     }
 }
 
-/// Creates the tray icon with an "Open" / "Quit" menu. Left-clicking the icon
-/// (Windows and macOS) restores the window; the menu opens on right click.
+#[cfg(target_os = "macos")]
+use macos_tray::open_window as open_from_tray;
+
+#[cfg(all(desktop, not(target_os = "macos")))]
+fn open_from_tray(app: &tauri::AppHandle) {
+    if app.get_webview_window(MAIN_WINDOW_LABEL).is_some() {
+        focus_main_window(app);
+        return;
+    }
+    let _ = stop_tray_sync(app);
+
+    // A native close can destroy the window. Rebuild it off the event handler
+    // thread so WebView2 can initialize on Windows.
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let _guard = state.reopen_window.lock().unwrap();
+        if app.get_webview_window(MAIN_WINDOW_LABEL).is_some() {
+            return;
+        }
+
+        if let Some(config) = app
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|config| config.label == MAIN_WINDOW_LABEL)
+        {
+            let result = tauri::WebviewWindowBuilder::from_config(&app, config)
+                .and_then(|builder| builder.visible(true).build());
+            if let Err(e) = result {
+                eprintln!("failed to reopen the main window: {e}");
+            }
+        }
+    });
+}
+
 #[cfg(desktop)]
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem};
@@ -61,7 +127,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => show_main_window(app),
+            "open" => open_from_tray(app),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -72,7 +138,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                show_main_window(tray.app_handle());
+                open_from_tray(tray.app_handle());
             }
         });
 
@@ -241,7 +307,7 @@ fn get_settings(state: State<AppState>) -> SettingsView {
 
 #[tauri::command]
 fn save_settings(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     state: State<AppState>,
     input: SettingsInput,
 ) -> CmdResult<SettingsView> {
@@ -251,16 +317,16 @@ fn save_settings(
     next.save(&state.settings_path)?;
     *s = next;
     let view = SettingsView::from(&*s);
-    #[cfg(desktop)]
+    #[cfg(all(desktop, not(target_os = "macos")))]
     let close_to_tray = s.close_action == CloseAction::MinimizeToTray;
     drop(s);
 
-    // The tray icon only exists while closing to the tray is enabled. Menu and
-    // tray creation must happen on the main thread.
-    #[cfg(desktop)]
+    #[cfg(target_os = "macos")]
+    macos_tray::notify_settings_changed();
+    #[cfg(all(desktop, not(target_os = "macos")))]
     {
-        let handle = app.clone();
-        let _ = app.run_on_main_thread(move || {
+        let handle = _app.clone();
+        let _ = _app.run_on_main_thread(move || {
             if let Err(e) = set_tray_enabled(&handle, close_to_tray) {
                 eprintln!("failed to update the tray icon: {e}");
             }
@@ -268,6 +334,34 @@ fn save_settings(
     }
 
     Ok(view)
+}
+
+fn minimize_on_close(_window: &tauri::Window) -> bool {
+    #[cfg(target_os = "macos")]
+    return false;
+    #[cfg(all(desktop, not(target_os = "macos")))]
+    return _window.state::<AppState>().closes_to_tray()
+        && _window.app_handle().tray_by_id(TRAY_ID).is_none();
+    #[cfg(mobile)]
+    return _window.state::<AppState>().closes_to_tray();
+}
+
+#[tauri::command]
+fn close_window(window: tauri::Window) -> CmdResult<()> {
+    if minimize_on_close(&window) {
+        window.minimize()
+    } else {
+        window.destroy()
+    }
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn restart_after_update(app: tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    app.exit(macos_tray::RESTART_PARENT);
+    #[cfg(not(target_os = "macos"))]
+    app.request_restart();
 }
 
 #[derive(Serialize)]
@@ -293,8 +387,7 @@ async fn sync_test(state: State<'_, AppState>) -> CmdResult<()> {
     cloud::test_connection(&cfg).await
 }
 
-#[tauri::command]
-async fn sync_now(state: State<'_, AppState>) -> CmdResult<cloud::SyncReport> {
+async fn sync(state: &AppState) -> CmdResult<cloud::SyncReport> {
     let cfg = state.settings.lock().unwrap().sync.clone();
     if !cfg.enabled {
         return Err("Sync is turned off.".into());
@@ -302,50 +395,83 @@ async fn sync_now(state: State<'_, AppState>) -> CmdResult<cloud::SyncReport> {
     if state.syncing.swap(true, Ordering::SeqCst) {
         return Err("A sync is already running.".into());
     }
-    let result = cloud::run(&cfg, &state.db).await;
-    state.syncing.store(false, Ordering::SeqCst);
-    result
+    struct SyncGuard<'a>(&'a AtomicBool);
+    impl Drop for SyncGuard<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
+    }
+    let _guard = SyncGuard(&state.syncing);
+    cloud::run(&cfg, &state.db).await
+}
+
+#[tauri::command]
+async fn sync_now(state: State<'_, AppState>) -> CmdResult<cloud::SyncReport> {
+    sync(&state).await
+}
+
+#[cfg(desktop)]
+fn start_tray_sync(app: &tauri::AppHandle) {
+    let state = app.state::<AppState>();
+    let settings = state.settings.lock().unwrap();
+    let cfg = &settings.sync;
+    if !cfg.enabled || !cfg.auto_sync || cfg.api_token.is_empty() {
+        return;
+    }
+
+    let interval = std::time::Duration::from_secs(u64::from(cfg.interval_minutes) * 60);
+    let app = app.clone();
+    *state.tray_sync.lock().unwrap() = Some(tauri::async_runtime::spawn(async move {
+        let state = app.state::<AppState>();
+        loop {
+            tokio::time::sleep(interval).await;
+            if let Err(e) = sync(&state).await {
+                eprintln!("background sync failed: {e}");
+            }
+        }
+    }));
+}
+
+#[cfg(desktop)]
+fn stop_tray_sync(app: &tauri::AppHandle) -> Option<tauri::async_runtime::JoinHandle<()>> {
+    let state = app.state::<AppState>();
+    let task = state.tray_sync.lock().unwrap().take();
+    if let Some(task) = &task {
+        task.abort();
+    }
+    task
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let context = tauri::generate_context!();
+    #[cfg(target_os = "macos")]
+    if !macos_tray::is_window_process() {
+        return macos_tray::run(context);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            let dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            let db = Db::open(dir.join("essays.db"))?;
-            let settings_path = dir.join("settings.json");
-            let settings = Settings::load(&settings_path);
-            #[cfg(desktop)]
-            let close_to_tray = settings.close_action == CloseAction::MinimizeToTray;
-            app.manage(AppState {
-                db: Mutex::new(db),
-                settings: Mutex::new(settings),
-                settings_path,
-                syncing: AtomicBool::new(false),
-                hidden_to_tray: AtomicBool::new(false),
-            });
+            initialize_state(app.handle())?;
 
-            // Only show a tray icon when closing the window hides the app there.
-            #[cfg(desktop)]
-            if let Err(e) = set_tray_enabled(app.handle(), close_to_tray) {
+            #[cfg(target_os = "macos")]
+            macos_tray::listen_for_parent(app.handle());
+            #[cfg(all(desktop, not(target_os = "macos")))]
+            if let Err(e) = set_tray_enabled(app.handle(), app.state::<AppState>().closes_to_tray()) {
                 eprintln!("failed to create the tray icon: {e}");
             }
 
             // The window is created hidden and shown by the frontend as soon as
             // it runs. If the frontend never gets that far (script error, etc.),
             // don't leave the user with an invisible app.
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(2));
-                    // Unless the user already closed it to the tray, in which
-                    // case popping it back up would be unwanted.
                     if !window
                         .state::<AppState>()
-                        .hidden_to_tray
+                        .minimized_on_close
                         .load(Ordering::SeqCst)
                     {
                         let _ = window.show();
@@ -356,31 +482,12 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let minimize = window.state::<AppState>().settings.lock().unwrap().close_action
-                    == CloseAction::MinimizeToTray;
-                if minimize {
+                if minimize_on_close(window) {
                     api.prevent_close();
-                    #[cfg(desktop)]
-                    {
-                        window
-                            .state::<AppState>()
-                            .hidden_to_tray
-                            .store(true, Ordering::SeqCst);
-                        let tray = window
-                            .app_handle()
-                            .tray_by_id(&tauri::tray::TrayIconId::new(TRAY_ID))
-                            .is_some();
-                        if tray {
-                            // Hiding (rather than minimizing) drops the taskbar
-                            // button, so the app lives in the tray only.
-                            let _ = window.hide();
-                        } else {
-                            // No tray available (e.g. no appindicator on Linux):
-                            // fall back to the taskbar so the window is reachable.
-                            let _ = window.minimize();
-                        }
-                    }
-                    #[cfg(not(desktop))]
+                    window
+                        .state::<AppState>()
+                        .minimized_on_close
+                        .store(true, Ordering::SeqCst);
                     let _ = window.minimize();
                 }
             }
@@ -408,18 +515,33 @@ pub fn run() {
             set_note_tags,
             get_settings,
             save_settings,
+            close_window,
+            restart_after_update,
             sync_status,
             sync_test,
             sync_now
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
-        .run(|_app, _event| {
-            // Clicking the Dock icon on macOS should restore a window that was
-            // closed to the tray.
-            #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = _event {
-                show_main_window(_app);
+        .run(|_app, event| match event {
+            #[cfg(all(desktop, not(target_os = "macos")))]
+            tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } if _app.tray_by_id(TRAY_ID).is_some()
+                && _app.state::<AppState>().closes_to_tray() =>
+            {
+                api.prevent_exit();
+                start_tray_sync(_app);
             }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } if _app.state::<AppState>().closes_to_tray() => {
+                api.prevent_exit();
+                _app.exit(macos_tray::CLOSE_TO_TRAY);
+            }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => focus_main_window(_app),
+            _ => {}
         });
 }

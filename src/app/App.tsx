@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   api,
   type Note,
@@ -16,7 +18,7 @@ import { NotebookTree } from "../components/sidebar/NotebookTree";
 import { SearchBar } from "../components/sidebar/SearchBar";
 import { SidebarFilters } from "../components/sidebar/SidebarFilters";
 import { NoteList } from "../components/notes/NoteList";
-import { NoteEditor } from "../components/notes/NoteEditor";
+import { NoteEditor, type NoteEditorHandle } from "../components/notes/NoteEditor";
 import { ManageDialog } from "../components/dialogs/ManageDialog";
 import { HelpDialog } from "../components/dialogs/HelpDialog";
 import { Resizer } from "../components/common/Resizer";
@@ -76,6 +78,32 @@ export default function App() {
   const [noteId, setNoteId] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const editorRef = useRef<NoteEditorHandle>(null);
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    let closing = false;
+    const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+      event.preventDefault();
+      if (!active || closing) return;
+      closing = true;
+      try {
+        if (await editorRef.current?.flush() === false) return;
+        await api.closeWindow();
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        closing = false;
+      }
+    });
+    void unlisten.catch((e) => {
+      if (active) setError(String(e));
+    });
+    return () => {
+      active = false;
+      void unlisten.then((remove) => remove()).catch(() => {});
+    };
+  }, []);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [dialog, setDialog] = useState<"status" | "tag" | null>(null);
@@ -491,6 +519,7 @@ export default function App() {
         {note ? (
           <NoteEditor
             key={`${note.id}:${noteRev}`}
+            ref={editorRef}
             note={note}
             statuses={statuses}
             tags={tags}

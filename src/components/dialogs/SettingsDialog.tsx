@@ -145,7 +145,7 @@ export function SettingsDialog({ settings, syncing, updater, onSaved, onSyncNow,
                   />
                   <span>
                     Minimize to tray
-                    <small>Closing the window hides it to the system tray; the app keeps running (and syncing) while this is on.</small>
+                    <small>The app keeps running and syncing in the system tray after the window closes.</small>
                   </span>
                 </label>
               </div>

@@ -54,7 +54,7 @@ export interface Tag {
   noteCount: number;
 }
 
-/** `"minimize"` hides the window to the system tray instead of closing it. */
+/** `"minimize"` closes the window and keeps the app running in the system tray. */
 export type CloseAction = "quit" | "minimize";
 
 export interface Settings {
@@ -126,6 +126,8 @@ export const api = {
 
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (input: SettingsInput) => invoke<Settings>("save_settings", { input }),
+  closeWindow: () => invoke<void>("close_window"),
+  restartAfterUpdate: () => invoke<void>("restart_after_update"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
   syncTest: () => invoke<void>("sync_test"),
   syncNow: () => invoke<SyncReport>("sync_now"),
