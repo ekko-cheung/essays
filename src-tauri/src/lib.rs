@@ -17,6 +17,8 @@ mod cloud;
 #[cfg(target_os = "macos")]
 mod macos_tray;
 mod settings;
+#[cfg(desktop)]
+mod single_instance;
 
 struct AppState {
     db: Mutex<Db>,
@@ -68,47 +70,14 @@ const MAIN_WINDOW_LABEL: &str = "main";
 const TRAY_ID: &str = "essays-tray";
 
 #[cfg(desktop)]
-fn single_instance() -> tauri::plugin::TauriPlugin<tauri::Wry> {
-    use std::fs::{File, OpenOptions, TryLockError};
-
-    tauri::plugin::Builder::new("single-instance")
-        .setup(|app, _| {
-            if tauri::is_dev() {
-                return Ok(());
-            }
-
-            let dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            let lock = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(dir.join("instance.lock"))?;
-            match lock.try_lock() {
-                Ok(()) => app.manage(Mutex::new(Some(lock))),
-                Err(TryLockError::WouldBlock) => std::process::exit(0),
-                Err(TryLockError::Error(error)) => return Err(error.into()),
-            };
-            Ok(())
-        })
-        .on_event(|app, event| {
-            // Tauri can spawn its replacement before the current process exits.
-            if matches!(event, tauri::RunEvent::Exit) {
-                if let Some(lock) = app.try_state::<Mutex<Option<File>>>() {
-                    lock.lock().unwrap().take();
-                }
-            }
-        })
-        .build()
-}
-
-#[cfg(desktop)]
-fn focus_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+fn focus_main_window(app: &tauri::AppHandle) -> bool {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
+        return false;
+    };
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+    true
 }
 
 #[cfg(target_os = "macos")]
@@ -116,8 +85,7 @@ use macos_tray::open_window as open_from_tray;
 
 #[cfg(all(desktop, not(target_os = "macos")))]
 fn open_from_tray(app: &tauri::AppHandle) {
-    if app.get_webview_window(MAIN_WINDOW_LABEL).is_some() {
-        focus_main_window(app);
+    if focus_main_window(app) {
         return;
     }
     let _ = stop_tray_sync(app);
@@ -128,7 +96,7 @@ fn open_from_tray(app: &tauri::AppHandle) {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let _guard = state.reopen_window.lock().unwrap();
-        if app.get_webview_window(MAIN_WINDOW_LABEL).is_some() {
+        if focus_main_window(&app) {
             return;
         }
 
@@ -139,10 +107,13 @@ fn open_from_tray(app: &tauri::AppHandle) {
             .iter()
             .find(|config| config.label == MAIN_WINDOW_LABEL)
         {
-            let result = tauri::WebviewWindowBuilder::from_config(&app, config)
-                .and_then(|builder| builder.visible(true).build());
-            if let Err(e) = result {
-                eprintln!("failed to reopen the main window: {e}");
+            match tauri::WebviewWindowBuilder::from_config(&app, config)
+                .and_then(|builder| builder.visible(true).build())
+            {
+                Ok(window) => {
+                    let _ = window.set_focus();
+                }
+                Err(e) => eprintln!("failed to reopen the main window: {e}"),
             }
         }
     });
@@ -487,7 +458,7 @@ pub fn run() {
 
     let builder = tauri::Builder::default();
     #[cfg(all(desktop, not(target_os = "macos")))]
-    let builder = builder.plugin(single_instance());
+    let builder = builder.plugin(single_instance::init());
 
     builder
         .plugin(tauri_plugin_opener::init())
@@ -580,7 +551,9 @@ pub fn run() {
                 _app.exit(macos_tray::CLOSE_TO_TRAY);
             }
             #[cfg(target_os = "macos")]
-            tauri::RunEvent::Reopen { .. } => focus_main_window(_app),
+            tauri::RunEvent::Reopen { .. } => {
+                focus_main_window(_app);
+            }
             _ => {}
         });
 }
