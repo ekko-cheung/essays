@@ -68,7 +68,7 @@ pub fn run(mut context: Context<Wry>) {
             initialize_state(app.handle())?;
             app.manage(Mutex::new(WindowProcess::default()));
             refresh_tray(app.handle());
-            spawn_window(app.handle(), false)?;
+            spawn_window(app.handle())?;
             Ok(())
         })
         .build(context)
@@ -110,7 +110,7 @@ pub fn open_window(app: &AppHandle) {
 }
 
 fn finish_open(app: &AppHandle) {
-    let result = spawn_window(app, true);
+    let result = spawn_window(app);
     app.state::<Mutex<WindowProcess>>().lock().unwrap().opening = false;
     if let Err(e) = result {
         eprintln!("failed to open Essays: {e}");
@@ -118,7 +118,7 @@ fn finish_open(app: &AppHandle) {
     }
 }
 
-fn spawn_window(app: &AppHandle, activate: bool) -> io::Result<()> {
+fn spawn_window(app: &AppHandle) -> io::Result<()> {
     let mut child = Command::new(std::env::current_exe()?)
         .arg(WINDOW_ARGUMENT)
         .stdin(Stdio::piped())
@@ -128,9 +128,7 @@ fn spawn_window(app: &AppHandle, activate: bool) -> io::Result<()> {
         let state = app.state::<Mutex<WindowProcess>>();
         let mut process = state.lock().unwrap();
         process.input = child.stdin.take();
-        if activate {
-            process.request_activation();
-        }
+        process.request_activation();
     }
     let output = BufReader::new(child.stdout.take().expect("window stdout is piped"));
     let app = app.clone();
