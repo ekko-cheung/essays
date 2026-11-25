@@ -68,6 +68,41 @@ const MAIN_WINDOW_LABEL: &str = "main";
 const TRAY_ID: &str = "essays-tray";
 
 #[cfg(desktop)]
+fn single_instance() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use std::fs::{File, OpenOptions, TryLockError};
+
+    tauri::plugin::Builder::new("single-instance")
+        .setup(|app, _| {
+            if tauri::is_dev() {
+                return Ok(());
+            }
+
+            let dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&dir)?;
+            let lock = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(dir.join("instance.lock"))?;
+            match lock.try_lock() {
+                Ok(()) => app.manage(Mutex::new(Some(lock))),
+                Err(TryLockError::WouldBlock) => std::process::exit(0),
+                Err(TryLockError::Error(error)) => return Err(error.into()),
+            };
+            Ok(())
+        })
+        .on_event(|app, event| {
+            // Tauri can spawn its replacement before the current process exits.
+            if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(lock) = app.try_state::<Mutex<Option<File>>>() {
+                    lock.lock().unwrap().take();
+                }
+            }
+        })
+        .build()
+}
+
+#[cfg(desktop)]
 fn focus_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = window.unminimize();
@@ -450,7 +485,11 @@ pub fn run() {
         return macos_tray::run(context);
     }
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(all(desktop, not(target_os = "macos")))]
+    let builder = builder.plugin(single_instance());
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {

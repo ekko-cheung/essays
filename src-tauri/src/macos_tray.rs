@@ -48,6 +48,7 @@ fn refresh_tray(app: &AppHandle) {
 pub fn run(mut context: Context<Wry>) {
     context.config_mut().app.windows.clear();
     tauri::Builder::default()
+        .plugin(crate::single_instance())
         .setup(|app| {
             initialize_state(app.handle())?;
             app.manage(Mutex::new(WindowProcess::default()));
