@@ -247,6 +247,9 @@ body:has(.resizer.active) { cursor: col-resize; user-select: none; }
 }
 .note-row-top { display: flex; align-items: center; gap: 8px; }
 .note-title { flex: 1; font-size: 14px; font-weight: 600; color: var(--fg); }
+.note-pin { flex-shrink: 0; }
+.note-pin[aria-pressed="true"] { color: var(--accent); }
+.note-pin[aria-pressed="true"] .icon { fill: currentColor; }
 .note-row .del { visibility: hidden; }
 .note-row:hover .del { visibility: visible; }
 .note-snippet {

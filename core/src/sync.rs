@@ -56,6 +56,8 @@ pub struct NoteRow {
     pub updated_at: i64,
     pub deleted_at: Option<i64>,
     pub mtime: i64,
+    #[serde(default)]
+    pub pinned: i64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -117,7 +119,7 @@ impl Table {
             Table::Tag => &["id", "name", "color", "deleted_at", "mtime"],
             Table::Note => &[
                 "id", "notebook_id", "title", "body_md", "status_id", "tag_ids", "created_at",
-                "updated_at", "deleted_at", "mtime",
+                "updated_at", "deleted_at", "mtime", "pinned",
             ],
         }
     }
@@ -127,7 +129,7 @@ impl Table {
             Table::Notebook => "id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, sort_order INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, mtime INTEGER NOT NULL",
             Table::Status => "id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, sort_order INTEGER NOT NULL, is_default INTEGER NOT NULL, deleted_at INTEGER, mtime INTEGER NOT NULL",
             Table::Tag => "id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, deleted_at INTEGER, mtime INTEGER NOT NULL",
-            Table::Note => "id TEXT PRIMARY KEY, notebook_id TEXT NOT NULL, title TEXT NOT NULL, body_md TEXT NOT NULL, status_id TEXT, tag_ids TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, mtime INTEGER NOT NULL",
+            Table::Note => "id TEXT PRIMARY KEY, notebook_id TEXT NOT NULL, title TEXT NOT NULL, body_md TEXT NOT NULL, status_id TEXT, tag_ids TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, mtime INTEGER NOT NULL, pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))",
         }
     }
 }
@@ -307,7 +309,7 @@ impl Db {
         let mut notes = self
             .conn
             .prepare(
-                "SELECT id, notebook_id, title, body_md, status_id, created_at, updated_at, deleted_at, mtime
+                "SELECT id, notebook_id, title, body_md, status_id, created_at, updated_at, deleted_at, mtime, pinned
                  FROM note WHERE dirty = 1 LIMIT ?1",
             )?
             .query_map(params![limit as i64], |r| {
@@ -322,6 +324,7 @@ impl Db {
                     updated_at: r.get(6)?,
                     deleted_at: r.get(7)?,
                     mtime: r.get(8)?,
+                    pinned: r.get(9)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -461,13 +464,13 @@ impl Db {
                 None => None,
             };
             tx.execute(
-                "INSERT INTO note (id, notebook_id, title, body_md, status_id, created_at, updated_at, deleted_at, mtime, dirty)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0)
+                "INSERT INTO note (id, notebook_id, title, body_md, status_id, created_at, updated_at, deleted_at, mtime, pinned, dirty)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0)
                  ON CONFLICT(id) DO UPDATE SET notebook_id = excluded.notebook_id, title = excluded.title,
                    body_md = excluded.body_md, status_id = excluded.status_id,
                    updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
-                   mtime = excluded.mtime, dirty = 0",
-                params![r.id, r.notebook_id, r.title, r.body_md, status_id, r.created_at, r.updated_at, r.deleted_at, r.mtime],
+                   mtime = excluded.mtime, pinned = excluded.pinned, dirty = 0",
+                params![r.id, r.notebook_id, r.title, r.body_md, status_id, r.created_at, r.updated_at, r.deleted_at, r.mtime, r.pinned],
             )?;
 
             let wanted: Vec<String> = serde_json::from_str(&r.tag_ids).unwrap_or_default();
@@ -627,6 +630,29 @@ mod tests {
         sync(&b, &mut remote);
         sync(&a, &mut remote);
         assert_eq!(titles(&a), ["one-edited"]);
+    }
+
+    #[test]
+    fn pin_and_unpin_sync_without_changing_the_note_timestamp() {
+        let (a, b) = (Db::open_in_memory().unwrap(), Db::open_in_memory().unwrap());
+        let mut remote = Remote::default();
+        let nb = a.create_notebook(None, "NB").unwrap();
+        let note = a.create_note(&nb.id).unwrap();
+        sync(&a, &mut remote);
+        sync(&b, &mut remote);
+
+        a.set_note_pinned(&note.id, true).unwrap();
+        sync(&a, &mut remote);
+        sync(&b, &mut remote);
+        let pinned = b.get_note(&note.id).unwrap();
+        assert!(pinned.pinned);
+        assert_eq!(pinned.updated_at, note.updated_at);
+
+        b.set_note_pinned(&note.id, false).unwrap();
+        sync(&b, &mut remote);
+        sync(&a, &mut remote);
+        assert!(!a.get_note(&note.id).unwrap().pinned);
+        assert_eq!(a.dirty_count().unwrap(), 0);
     }
 
     #[test]

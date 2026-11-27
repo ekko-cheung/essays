@@ -14,6 +14,7 @@ export interface Note {
   bodyMd: string;
   statusId: string | null;
   tagIds: string[];
+  pinned: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -25,6 +26,7 @@ export interface NoteSummary {
   snippet: string;
   statusId: string | null;
   tagIds: string[];
+  pinned: boolean;
   updatedAt: number;
 }
 
@@ -103,6 +105,8 @@ export const api = {
     invoke<Note>("create_note", { notebookId }),
   updateNote: (id: string, title: string, bodyMd: string) =>
     invoke<number>("update_note", { id, title, bodyMd }),
+  setNotePinned: (id: string, pinned: boolean) =>
+    invoke<void>("set_note_pinned", { id, pinned }),
   deleteNote: (id: string) => invoke<void>("delete_note", { id }),
 
   listStatuses: () => invoke<Status[]>("list_statuses"),

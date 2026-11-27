@@ -19,6 +19,7 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  onPin: (id: string, pinned: boolean) => void;
   onDelete: (id: string, title: string) => void;
 }
 
@@ -81,6 +82,19 @@ export function NoteList(p: Props) {
           <div className="note-row-top">
             <StatusDot status={n.statusId ? statusById.get(n.statusId) : undefined} />
             <span className="note-title ellipsis">{n.title || "Untitled"}</span>
+            <button
+              type="button"
+              className="icon-btn note-pin"
+              title={n.pinned ? "Unpin note" : "Pin note"}
+              aria-label={`Pin ${n.title || "Untitled"}`}
+              aria-pressed={n.pinned}
+              onClick={(e) => {
+                e.stopPropagation();
+                p.onPin(n.id, !n.pinned);
+              }}
+            >
+              <Icon name="pin" size={14} />
+            </button>
             <button
               className="icon-btn del"
               title="Delete note"

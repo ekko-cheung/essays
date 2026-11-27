@@ -82,8 +82,26 @@ impl D1 {
     }
 
     pub async fn ensure_schema(&self) -> Result<(), String> {
-        let stmts: Vec<Stmt> = remote_schema().into_iter().map(|s| (s, vec![])).collect();
-        self.batch(&stmts).await.map(|_| ())
+        let table_info = ("PRAGMA table_info(sync_note)".into(), vec![]);
+        let has_pinned = |results: Vec<Vec<Value>>| {
+            results
+                .last()
+                .is_some_and(|columns| columns.iter().any(|c| c["name"] == "pinned"))
+        };
+        let mut stmts: Vec<Stmt> = remote_schema().into_iter().map(|s| (s, vec![])).collect();
+        stmts.push(table_info.clone());
+        if has_pinned(self.batch(&stmts).await?) {
+            return Ok(());
+        }
+
+        let upgrade = "ALTER TABLE sync_note ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1))";
+        if let Err(error) = self.batch(&[(upgrade.into(), vec![])]).await {
+            // Another device may have upgraded the table since the check.
+            if !self.batch(&[table_info]).await.is_ok_and(has_pinned) {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 
     async fn pull_table(&self, table: Table, mut cursor: i64) -> Result<(Vec<Value>, i64), String> {

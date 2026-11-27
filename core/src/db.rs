@@ -17,6 +17,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_init.sql"),
     include_str!("../migrations/0002_drop_fts.sql"),
     include_str!("../migrations/0003_sync.sql"),
+    include_str!("../migrations/0004_note_pinned.sql"),
 ];
 
 pub struct Db {
@@ -79,7 +80,9 @@ mod tests {
         let db = Db::open(&path).unwrap();
         let version: i64 = db.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
         assert_eq!(version as usize, MIGRATIONS.len());
-        assert_eq!(db.get_note("n").unwrap().title, "kept");
+        let note = db.get_note("n").unwrap();
+        assert_eq!(note.title, "kept");
+        assert!(!note.pinned);
         let fts: i64 = db
             .conn
             .query_row("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'note_fts%'", [], |r| r.get(0))

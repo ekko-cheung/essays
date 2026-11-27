@@ -242,6 +242,16 @@ fn update_note(state: State<AppState>, id: String, title: String, body_md: Strin
 }
 
 #[tauri::command]
+fn set_note_pinned(state: State<AppState>, id: String, pinned: bool) -> CmdResult<()> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .set_note_pinned(&id, pinned)
+        .map_err(err)
+}
+
+#[tauri::command]
 fn delete_note(state: State<AppState>, id: String) -> CmdResult<()> {
     state.db.lock().unwrap().delete_note(&id).map_err(err)
 }
@@ -512,6 +522,7 @@ pub fn run() {
             get_note,
             create_note,
             update_note,
+            set_note_pinned,
             delete_note,
             list_statuses,
             create_status,

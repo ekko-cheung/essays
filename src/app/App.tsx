@@ -170,11 +170,14 @@ export default function App() {
 
   // Responses can arrive out of order while typing; only the newest request may win.
   const querySeq = useRef(0);
+  const currentQuery = useRef(query);
+  currentQuery.current = query;
   const refreshNotes = useCallback(async () => {
+    const activeQuery = currentQuery.current;
     const seq = ++querySeq.current;
-    const result = await api.queryNotes(query);
-    if (seq === querySeq.current) setNotes(result);
-  }, [query]);
+    const result = await api.queryNotes(activeQuery);
+    if (seq === querySeq.current && activeQuery === currentQuery.current) setNotes(result);
+  }, []);
 
   // Status/tag counts depend on which notes exist, so notes being added or removed
   // (including via a deleted notebook) must refresh them too.
@@ -207,7 +210,7 @@ export default function App() {
     refreshNotes()
       .catch((e) => setError(String(e)))
       .finally(() => setNotesLoaded(true));
-  }, [refreshNotes]);
+  }, [query, refreshNotes]);
 
   // Load the full note when the selection changes. `cancelled` guards against
   // a slow response for a previous selection overwriting a newer one.
@@ -472,6 +475,7 @@ export default function App() {
         selectedId={noteId}
         onSelect={setNoteId}
         onCreate={createNote}
+        onPin={(id, pinned) => void run(() => api.setNotePinned(id, pinned), refreshNotes)}
         onDelete={async (id, title) => {
           const ok = await confirm({
             title: `Delete note "${title}"?`,

@@ -98,8 +98,8 @@ impl Db {
         }
 
         let sql = format!(
-            "SELECT n.id, n.notebook_id, n.title, substr(n.body_md, 1, 200), n.status_id, n.updated_at
-             FROM note n WHERE {} ORDER BY n.updated_at DESC, n.id DESC",
+            "SELECT n.id, n.notebook_id, n.title, substr(n.body_md, 1, 200), n.status_id, n.updated_at, n.pinned
+             FROM note n WHERE {} ORDER BY n.pinned DESC, n.updated_at DESC, n.id DESC",
             wheres.join(" AND ")
         );
         let mut stmt = self.conn.prepare(&sql)?;
@@ -113,6 +113,7 @@ impl Db {
                     status_id: r.get(4)?,
                     tag_ids: Vec::new(),
                     updated_at: r.get(5)?,
+                    pinned: r.get(6)?,
                 })
             })?
             .collect::<std::result::Result<_, _>>()?;

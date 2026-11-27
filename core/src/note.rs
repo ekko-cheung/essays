@@ -15,6 +15,7 @@ pub struct Note {
     pub body_md: String,
     pub status_id: Option<String>,
     pub tag_ids: Vec<String>,
+    pub pinned: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -29,11 +30,12 @@ pub struct NoteSummary {
     pub snippet: String,
     pub status_id: Option<String>,
     pub tag_ids: Vec<String>,
+    pub pinned: bool,
     pub updated_at: i64,
 }
 
 impl Db {
-    /// Live notes directly inside `notebook_id`, most recently updated first.
+    /// Live notes directly inside `notebook_id`, pinned first and then by recency.
     pub fn list_notes(&self, notebook_id: &str) -> Result<Vec<NoteSummary>> {
         self.query_notes(&NoteQuery {
             notebook_id: Some(notebook_id.to_string()),
@@ -56,7 +58,7 @@ impl Db {
         let mut note = self
             .conn
             .query_row(
-                "SELECT id, notebook_id, title, body_md, status_id, created_at, updated_at
+                "SELECT id, notebook_id, title, body_md, status_id, created_at, updated_at, pinned
                  FROM note WHERE id = ?1 AND deleted_at IS NULL",
                 params![id],
                 |r| {
@@ -69,6 +71,7 @@ impl Db {
                         tag_ids: Vec::new(),
                         created_at: r.get(5)?,
                         updated_at: r.get(6)?,
+                        pinned: r.get(7)?,
                     })
                 },
             )
@@ -112,6 +115,17 @@ impl Db {
             return Err(Error::NotFound(id.into()));
         }
         Ok(now)
+    }
+
+    pub fn set_note_pinned(&self, id: &str, pinned: bool) -> Result<()> {
+        let n = self.conn.execute(
+            "UPDATE note SET pinned = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+            params![pinned, id],
+        )?;
+        if n == 0 {
+            return Err(Error::NotFound(id.into()));
+        }
+        Ok(())
     }
 
     pub fn delete_note(&self, id: &str) -> Result<()> {
@@ -185,5 +199,42 @@ mod tests {
         let note = db.create_note(&nb.id).unwrap();
         db.update_note(&note.id, "t", &"x".repeat(1000)).unwrap();
         assert_eq!(db.list_notes(&nb.id).unwrap()[0].snippet.chars().count(), 200);
+    }
+
+    #[test]
+    fn pin_promotes_notes_without_changing_recency_or_filters() {
+        let db = Db::open_in_memory().unwrap();
+        let nb = db.create_notebook(None, "NB").unwrap();
+        let older = db.create_note(&nb.id).unwrap();
+        let newer = db.create_note(&nb.id).unwrap();
+        db.conn
+            .execute("UPDATE note SET updated_at = 0 WHERE id = ?1", params![older.id])
+            .unwrap();
+        db.update_note(&newer.id, "match", "").unwrap();
+        assert!(!older.pinned);
+
+        db.set_note_pinned(&older.id, true).unwrap();
+        let list = db.list_notes(&nb.id).unwrap();
+        assert_eq!(list[0].id, older.id);
+        assert!(list[0].pinned);
+        let saved = db.get_note(&older.id).unwrap();
+        assert!(saved.pinned);
+        assert_eq!(saved.updated_at, 0);
+        let matches = db
+            .query_notes(&NoteQuery {
+                search: "match".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].id, newer.id);
+
+        db.set_note_pinned(&older.id, false).unwrap();
+        assert_eq!(db.list_notes(&nb.id).unwrap()[0].id, newer.id);
+        db.delete_note(&older.id).unwrap();
+        assert!(matches!(
+            db.set_note_pinned(&older.id, true),
+            Err(Error::NotFound(_))
+        ));
     }
 }
