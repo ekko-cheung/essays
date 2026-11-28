@@ -1,8 +1,11 @@
-use crate::settings::Appearance;
+use crate::settings::{Appearance, MarkdownTypography};
 use gpui_kit::{
-    App, HighlightStyle, Hsla, StyleRefinement, Styled, Window,
-    component::{ActiveTheme, Theme, ThemeMode, text::TextViewStyle},
-    rgb,
+    App, FontWeight, HighlightStyle, Hsla, StyleRefinement, Styled, Window,
+    component::{
+        ActiveTheme, Theme, ThemeMode,
+        text::{TextView, TextViewStyle},
+    },
+    px, relative, rems, rgb,
 };
 
 struct Palette {
@@ -150,19 +153,100 @@ pub(super) fn metadata_color(color: &str) -> Option<Hsla> {
         .map(|value| rgb(value).into())
 }
 
-pub(super) fn markdown_preview_style(cx: &App) -> TextViewStyle {
+pub(super) fn markdown_code_background(cx: &App) -> Hsla {
+    let palette = if cx.theme().is_dark() { &DARK } else { &LIGHT };
+    rgb(palette.code_background).into()
+}
+
+pub(super) fn style_markdown_editor<E: Styled>(editor: E, typography: &MarkdownTypography) -> E {
+    with_markdown_family(
+        editor
+            .text_size(px(f32::from(typography.font_size())))
+            .line_height(relative(1.5)),
+        typography,
+    )
+}
+
+fn with_markdown_family<E: Styled>(element: E, typography: &MarkdownTypography) -> E {
+    match &typography.font_family {
+        Some(font) => element.font_family(font.clone()),
+        None => element,
+    }
+}
+
+pub(super) fn style_markdown_preview(
+    preview: TextView,
+    typography: &MarkdownTypography,
+    cx: &App,
+) -> TextView {
     let theme = cx.theme();
     let palette = if theme.is_dark() { &DARK } else { &LIGHT };
-    let code_bg = Hsla::from(rgb(palette.code_background));
-    TextViewStyle::default()
-        .code_block(
+    let code_bg = markdown_code_background(cx);
+    let font_size = px(f32::from(typography.font_size()));
+    let code_size = font_size * 0.9;
+    let style = TextViewStyle {
+        highlight_theme: theme.highlight_theme.clone(),
+        heading_base_font_size: font_size * 0.875,
+        ..TextViewStyle::default()
+    }
+    .paragraph_gap(rems(1.))
+    .heading_font_size(|level, base| {
+        base * match level {
+            1 => 2.15,
+            2 => 1.65,
+            3 => 1.35,
+            4 => 1.15,
+            5 => 1.05,
+            _ => 1.,
+        }
+    })
+    .code_block(with_markdown_family(
+        StyleRefinement::default()
+            .bg(code_bg)
+            .border_1()
+            .border_color(theme.border)
+            .rounded(theme.radius_lg)
+            .px_4()
+            .pt_7()
+            .pb_4()
+            .text_size(code_size),
+        typography,
+    ))
+    .inline_code(HighlightStyle {
+        color: Some(rgb(palette.code_foreground).into()),
+        background_color: Some(code_bg),
+        ..Default::default()
+    })
+    .table_head(
+        StyleRefinement::default()
+            .bg(theme.muted)
+            .font_weight(FontWeight::SEMIBOLD),
+    )
+    .table_cell(StyleRefinement::default().text_size(font_size));
+    with_markdown_family(preview, typography)
+        .style(style)
+        .text_size(font_size)
+        .line_height(relative(1.6))
+        .inline_code_style(with_markdown_family(
             StyleRefinement::default()
-                .bg(code_bg)
-                .rounded(theme.radius_lg),
+                .rounded_sm()
+                .px_1()
+                .text_size(code_size),
+            typography,
+        ))
+        .list_style(
+            StyleRefinement::default()
+                .text_color(theme.link)
+                .text_size(font_size),
         )
-        .inline_code(HighlightStyle {
-            color: Some(rgb(palette.code_foreground).into()),
-            background_color: Some(code_bg),
-            ..Default::default()
-        })
+        .blockquote_style(
+            StyleRefinement::default()
+                .bg(theme.ring.opacity(0.06))
+                .border_l_2()
+                .border_color(theme.ring.opacity(0.65))
+                .rounded_r_md()
+                .px_4()
+                .py_3()
+                .text_color(theme.secondary_foreground),
+        )
 }

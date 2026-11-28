@@ -48,6 +48,7 @@ pub struct Settings {
     pub auto_close_brackets: bool,
     pub sync: SyncSettings,
     pub appearance: Appearance,
+    pub markdown: MarkdownTypography,
     pub view: View,
     pub include_descendants: bool,
     pub auto_check_updates: bool,
@@ -65,6 +66,7 @@ impl Default for Settings {
             auto_close_brackets: true,
             sync: SyncSettings::default(),
             appearance: Appearance::System,
+            markdown: MarkdownTypography::default(),
             view: View::Split,
             include_descendants: true,
             auto_check_updates: true,
@@ -106,9 +108,35 @@ pub enum Appearance {
     Dark,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MarkdownTypography {
+    pub font_family: Option<String>,
+    pub font_size: u16,
+}
+
+impl MarkdownTypography {
+    pub const FONT_SIZES: std::ops::RangeInclusive<u16> = 12..=32;
+
+    pub fn font_size(&self) -> u16 {
+        self.font_size
+            .clamp(*Self::FONT_SIZES.start(), *Self::FONT_SIZES.end())
+    }
+}
+
+impl Default for MarkdownTypography {
+    fn default() -> Self {
+        Self {
+            font_family: None,
+            font_size: 18,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum View {
+    Live,
     Source,
     #[default]
     Split,
@@ -171,5 +199,24 @@ mod tests {
             interval_minutes: 5,
         });
         assert!(!settings.auto_close_brackets);
+    }
+
+    #[test]
+    fn markdown_typography_defaults_for_existing_settings_and_persists() {
+        let old: Settings = serde_json::from_str(r#"{"appearance":"dark"}"#).unwrap();
+        assert_eq!(old.markdown.font_size(), 18);
+        assert_eq!(old.markdown.font_family, None);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let custom = Settings {
+            markdown: MarkdownTypography {
+                font_family: Some("Georgia".into()),
+                font_size: 22,
+            },
+            ..old
+        };
+        custom.save(&path).unwrap();
+        assert_eq!(Settings::load(&path).markdown, custom.markdown);
     }
 }

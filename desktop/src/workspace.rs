@@ -1,4 +1,5 @@
 mod dialogs;
+mod live_preview;
 mod markdown_edit;
 mod panes;
 mod theme;
@@ -19,7 +20,7 @@ use gpui_kit::{
     component::{
         ActiveTheme, StyledExt, WindowExt,
         button::{Button, ButtonVariants},
-        input::{EditorState, InputEvent, InputState},
+        input::{EditorState, InputEvent, InputState, TextareaState},
         notification::Notification,
         resizable::{ResizableState, h_resizable, resizable_panel},
     },
@@ -35,6 +36,7 @@ actions!(
         NewNote,
         FindNotes,
         SaveNote,
+        LiveView,
         SourceView,
         SplitView,
         PreviewView,
@@ -60,6 +62,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(shortcut!("n"), NewNote, Some("Essays")),
         KeyBinding::new(shortcut!("f"), FindNotes, Some("Essays")),
         KeyBinding::new(shortcut!("s"), SaveNote, Some("Essays")),
+        KeyBinding::new(shortcut!("1"), LiveView, Some("Essays")),
         KeyBinding::new(shortcut!("2"), SourceView, Some("Essays")),
         KeyBinding::new(shortcut!("3"), SplitView, Some("Essays")),
         KeyBinding::new(shortcut!("4"), PreviewView, Some("Essays")),
@@ -89,6 +92,8 @@ pub struct Workspace {
     notes_scroll: UniformListScrollHandle,
     title: Entity<InputState>,
     editor: Entity<EditorState>,
+    live_editor: Entity<TextareaState>,
+    live_preview: live_preview::LivePreview,
     note: Option<Note>,
     save_task: Option<Task<()>>,
     save_failed: bool,
@@ -118,6 +123,7 @@ impl Workspace {
                 .line_number(false)
                 .auto_close(settings.auto_close_brackets)
         });
+        let live_editor = cx.new(|cx| TextareaState::new(window, cx));
         let subscriptions = vec![
             cx.subscribe_in(&search, window, |this, _, event, _, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -134,8 +140,23 @@ impl Workspace {
                     this.edited(cx);
                 }
             }),
+            cx.subscribe_in(&live_editor, window, |this, _, event, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.edited(cx);
+                }
+            }),
+            cx.observe_in(&live_editor, window, |this, editor, window, cx| {
+                if this.service.settings().view == View::Live {
+                    let source_changed =
+                        editor.update(cx, |state, cx| this.live_preview.update(state, window, cx));
+                    if source_changed {
+                        cx.notify();
+                    }
+                }
+            }),
             cx.observe_window_appearance(window, |this, window, cx| {
                 apply_appearance(this.service.settings().appearance, window, cx);
+                this.live_editor.update(cx, |_, cx| cx.notify());
             }),
         ];
         let mut this = Self {
@@ -158,6 +179,8 @@ impl Workspace {
             notes_scroll: UniformListScrollHandle::new(),
             title,
             editor,
+            live_editor,
+            live_preview: live_preview::LivePreview::default(),
             note: None,
             save_task: None,
             save_failed: false,
@@ -204,6 +227,9 @@ impl Workspace {
             input.set_value(note.as_ref().map_or("", |n| n.title.as_str()), window, cx);
         });
         self.editor.update(cx, |editor, cx| {
+            editor.set_value(note.as_ref().map_or("", |n| n.body_md.as_str()), window, cx);
+        });
+        self.live_editor.update(cx, |editor, cx| {
             editor.set_value(note.as_ref().map_or("", |n| n.body_md.as_str()), window, cx);
         });
         if note.is_none() && self.note.is_some() {
@@ -395,8 +421,16 @@ impl Workspace {
     fn is_dirty(&self, cx: &App) -> bool {
         self.note.as_ref().is_some_and(|note| {
             self.title.read(cx).value().as_ref() != note.title
-                || self.editor.read(cx).text().slice(..) != note.body_md.as_str()
+                || self.body_text(cx).slice(..) != note.body_md.as_str()
         })
+    }
+
+    fn body_text<'a>(&self, cx: &'a App) -> &'a gpui_kit::base::input::Rope {
+        if self.service.settings().view == View::Live {
+            self.live_editor.read(cx).text()
+        } else {
+            self.editor.read(cx).text()
+        }
     }
 
     fn edited(&mut self, cx: &mut Context<Self>) {
@@ -416,12 +450,12 @@ impl Workspace {
     }
 
     fn save_draft(&mut self, cx: &mut Context<Self>) -> bool {
+        let body = self.body_text(cx).to_string();
         let Some(note) = self.note.as_mut() else {
             return true;
         };
         let title = self.title.read(cx).value();
-        let body = self.editor.read(cx).value();
-        if title.as_ref() == note.title && body.as_ref() == note.body_md {
+        if title.as_ref() == note.title && body == note.body_md {
             if self.save_failed {
                 self.message = None;
             }
@@ -435,7 +469,7 @@ impl Workspace {
         {
             Ok(at) => {
                 note.title = title.to_string();
-                note.body_md = body.to_string();
+                note.body_md = body;
                 note.updated_at = at;
                 if self.save_failed {
                     self.message = None;
@@ -453,13 +487,49 @@ impl Workspace {
     }
 
     fn set_mode(&mut self, mode: View, window: &mut Window, cx: &mut Context<Self>) {
+        let previous = self.service.settings().view;
         if let Err(error) = self.service.save_settings(|s| s.view = mode) {
             self.report(error, cx);
             return;
         }
         if self.note.is_some() {
+            if previous == View::Live && mode != View::Live {
+                let from = self.live_editor.read(cx);
+                let (body, selection, reversed) = (
+                    from.value(),
+                    from.selected_range(),
+                    from.is_selection_reversed(),
+                );
+                self.editor.update(cx, |editor, cx| {
+                    if editor.text().slice(..) != body.as_ref() {
+                        editor.set_value(body, window, cx);
+                    }
+                    editor.set_selected_range_with_direction(selection, reversed, cx);
+                });
+            } else if previous != View::Live && mode == View::Live {
+                let from = self.editor.read(cx);
+                let (body, selection, reversed) = (
+                    from.value(),
+                    from.selected_range(),
+                    from.is_selection_reversed(),
+                );
+                self.live_editor.update(cx, |editor, cx| {
+                    if editor.text().slice(..) != body.as_ref() {
+                        editor.set_value(body, window, cx);
+                    } else {
+                        // The incoming source selection may be inside a previously hidden marker.
+                        let _ =
+                            editor.set_tokens(gpui_kit::base::input::InputContent::new(body), cx);
+                    }
+                    editor.set_selected_range_with_direction(selection, reversed, cx);
+                    cx.notify();
+                });
+            }
             if mode == View::Preview {
                 window.focus(&self.workspace_focus, cx);
+            } else if mode == View::Live {
+                self.live_editor
+                    .update(cx, |editor, cx| editor.focus(window, cx));
             } else {
                 self.editor
                     .update(cx, |editor, cx| editor.focus(window, cx));
@@ -575,6 +645,9 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &SaveNote, _, cx| {
                 this.flush(cx);
             }))
+            .on_action(
+                cx.listener(|this, _: &LiveView, window, cx| this.set_mode(View::Live, window, cx)),
+            )
             .on_action(cx.listener(|this, _: &SourceView, window, cx| {
                 this.set_mode(View::Source, window, cx)
             }))
@@ -620,7 +693,7 @@ impl Render for Workspace {
                         .child(
                             resizable_panel()
                                 .size_range(px(300.)..px(f32::MAX))
-                                .child(self.note_editor(settings.view, cx)),
+                                .child(self.note_editor(&settings, cx)),
                         ),
                 ),
             )

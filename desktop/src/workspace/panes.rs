@@ -4,7 +4,7 @@ use gpui_kit::assets::IconName as WorkspaceIcon;
 use gpui_kit::component::{
     Icon, IconName, Selectable, Sizable,
     checkbox::Checkbox,
-    input::{Editor, Input},
+    input::{Editor, Input, Textarea},
     menu::{DropdownMenu, PopupMenu, PopupMenuItem},
     tab::{Tab, TabBar},
     text::TextView,
@@ -860,7 +860,12 @@ impl Workspace {
             .into_any_element()
     }
 
-    pub(super) fn note_editor(&self, mode: View, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn note_editor(
+        &self,
+        settings: &crate::settings::Settings,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mode = settings.view;
         let Some(note) = self.note.as_ref() else {
             let missing_notebooks = self.notebooks.is_empty();
             let can_create_note = self.query.notebook_id.is_some() && self.notes.is_empty();
@@ -908,13 +913,14 @@ impl Workspace {
         } else {
             ("Saved", cx.theme().muted_foreground)
         };
-        let modes = [View::Source, View::Split, View::Preview];
-        let mode_index = modes.iter().position(|value| *value == mode).unwrap_or(1);
+        let modes = [View::Live, View::Source, View::Split, View::Preview];
+        let mode_index = modes.iter().position(|value| *value == mode).unwrap_or(2);
         let mode_tabs = TabBar::new("editor-view")
             .segmented()
             .small()
             .children(
                 [
+                    ("Live preview", WorkspaceIcon::Sparkles),
                     ("Source", WorkspaceIcon::FileText),
                     ("Split", WorkspaceIcon::Columns2),
                     ("Preview", WorkspaceIcon::Eye),
@@ -945,31 +951,25 @@ impl Workspace {
                 .min_w_0()
                 .min_h_0()
                 .px_3()
-                .pt_3()
+                .pt_4()
                 .when(mode == View::Preview, |pane| pane.px_6())
                 .child(
-                    TextView::markdown(format!("preview-{}", note.id), markdown)
-                        .style(super::theme::markdown_preview_style(cx))
-                        .blockquote_style(
-                            StyleRefinement::default()
-                                .bg(cx.theme().ring.opacity(0.06))
-                                .border_l_2()
-                                .border_color(cx.theme().ring.opacity(0.55))
-                                .text_color(cx.theme().secondary_foreground),
-                        )
-                        .scrollable(true)
-                        .size_full()
-                        .max_w(rems(50.))
-                        .text_size(rems(0.9375))
-                        .line_height(rems(1.625))
-                        .on_link_click(|url, _, _, cx| {
-                            if url.starts_with("https://")
-                                || url.starts_with("http://")
-                                || url.starts_with("mailto:")
-                            {
-                                cx.open_url(url);
-                            }
-                        }),
+                    super::theme::style_markdown_preview(
+                        TextView::markdown(format!("preview-{}", note.id), markdown),
+                        &settings.markdown,
+                        cx,
+                    )
+                    .scrollable(true)
+                    .size_full()
+                    .max_w(rems(46.))
+                    .on_link_click(|url, _, _, cx| {
+                        if url.starts_with("https://")
+                            || url.starts_with("http://")
+                            || url.starts_with("mailto:")
+                        {
+                            cx.open_url(url);
+                        }
+                    }),
                 )
         };
         let source = || {
@@ -985,14 +985,51 @@ impl Workspace {
                 }))
                 .child(
                     div().flex_1().min_h_0().px_3().pt_2().child(
-                        Editor::new(&self.editor)
-                            .size_full()
-                            .appearance(false)
-                            .aria_label("Markdown source"),
+                        super::theme::style_markdown_editor(
+                            Editor::new(&self.editor)
+                                .size_full()
+                                .appearance(false)
+                                .aria_label("Markdown source"),
+                            &settings.markdown,
+                        ),
                     ),
                 )
         };
         let body = match mode {
+            View::Live => div()
+                .size_full()
+                .min_w_0()
+                .min_h_0()
+                .px_3()
+                .pt_2()
+                .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    if this.service.settings().auto_close_brackets {
+                        super::markdown_edit::complete_fence(&this.live_editor, event, window, cx);
+                    }
+                }))
+                .child(
+                    div()
+                        .relative()
+                        .size_full()
+                        .children(self.live_preview.code_backgrounds(&self.live_editor))
+                        .child(super::theme::style_markdown_editor(
+                            Textarea::new(&self.live_editor)
+                                .size_full()
+                                .h(relative(1.))
+                                .appearance(false)
+                                .aria_label("Markdown live preview")
+                                .token(|token, _, _| {
+                                    let label = token.token().id();
+                                    if label.as_ref() == "hide" {
+                                        div().size(px(0.))
+                                    } else {
+                                        div().child(label.clone())
+                                    }
+                                }),
+                            &settings.markdown,
+                        )),
+                )
+                .into_any_element(),
             View::Source => source().into_any_element(),
             View::Split => h_resizable("markdown-split")
                 .child(

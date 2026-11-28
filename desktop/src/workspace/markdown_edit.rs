@@ -1,9 +1,9 @@
 use gpui_kit::{
     App, Context, Entity, EntityInputHandler, KeyDownEvent, Window,
     base::input::{
-        AutoClosingPair, BracketPair, language_config::LanguageConfig, set_language_config,
+        AutoClosingPair, BracketPair, InputBaseState, MultiLineMode,
+        language_config::LanguageConfig, set_language_config,
     },
-    component::input::EditorState,
 };
 use markdown::mdast::Node;
 
@@ -16,8 +16,8 @@ pub(super) fn register_brackets(cx: &mut App) {
     set_language_config("markdown", rules, cx);
 }
 
-pub(super) fn complete_fence(
-    editor: &Entity<EditorState>,
+pub(super) fn complete_fence<M: MultiLineMode>(
+    editor: &Entity<InputBaseState<M>>,
     event: &KeyDownEvent,
     window: &mut Window,
     cx: &mut App,
@@ -25,7 +25,7 @@ pub(super) fn complete_fence(
     if event.keystroke.key_char.as_deref() != Some("`") {
         return;
     }
-    let completed = editor.update(cx, |state, cx: &mut Context<EditorState>| {
+    let completed = editor.update(cx, |state, cx: &mut Context<InputBaseState<M>>| {
         if !state.selected_range().is_empty() || state.marked_text_range(window, cx).is_some() {
             return false;
         }

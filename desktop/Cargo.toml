@@ -7,7 +7,7 @@ edition = "2024"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 dirs = "6"
 essays-core = { path = "../core" }
-gpui-kit = { version = "=0.11.0", default-features = false, features = ["component", "assets", "tree-sitter-markdown", "tree-sitter-markdown-inline", "syntect"] }
+gpui-kit = { version = "=0.11.0", default-features = false, features = ["component", "assets", "tree-sitter-languages", "tree-sitter-markdown-inline"] }
 markdown = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 semver = "1"
@@ -15,6 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
+tree-sitter = "0.26"
 
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }

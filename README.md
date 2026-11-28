@@ -22,7 +22,7 @@ Essays automatically opens the existing `essays.db` and `settings.json` in:
 - Windows: `%APPDATA%\com.essays.app`
 - macOS: `~/Library/Application Support/com.essays.app`
 
-Your notebooks, notes, and sync settings carry over. Appearance and layout preferences stored in the old web frontend start at their native defaults. The editor opens in Split mode. Source, Split, and Preview are also available with `Cmd/Ctrl+2`, `3`, and `4`.
+Your notebooks, notes, and sync settings carry over. Appearance and layout preferences stored in the old web frontend start at their native defaults. The editor opens in Split mode by default. Use `Cmd/Ctrl+1` for Live Preview, which renders Markdown in the editor and reveals the source on lines you edit. Use `Cmd/Ctrl+2`, `3`, and `4` for Source, Split, and Preview.
 
 In **Settings → Updates**, Essays can check for a newer stable release and open its download page. Install the downloaded update after exiting Essays.
 

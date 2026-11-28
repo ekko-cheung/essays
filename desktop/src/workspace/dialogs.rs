@@ -1,15 +1,16 @@
 use super::{panes::note_title, *};
 use crate::{
     cloud, desktop,
-    settings::{CloseAction, Settings, SettingsInput},
+    settings::{CloseAction, MarkdownTypography, Settings, SettingsInput},
 };
 use gpui_kit::component::{
-    Disableable, Selectable, Sizable, WindowExt,
+    Disableable, IndexPath, Selectable, Sizable, WindowExt,
     checkbox::Checkbox,
     dialog::{Confirm, DialogButtonProps},
     form::{Field, Form},
     input::Input,
     notification::Notification,
+    select::{SearchableVec, Select, SelectState},
 };
 
 #[derive(Clone, Copy)]
@@ -375,6 +376,7 @@ impl Workspace {
                         ("N", "New note"),
                         ("F", "Search notes"),
                         ("S", "Save now"),
+                        ("1", "Live preview"),
                         ("2", "Source view"),
                         ("3", "Split view"),
                         ("4", "Preview"),
@@ -527,6 +529,8 @@ struct SettingsForm {
     service: Arc<Service>,
     runtime: Handle,
     draft: Settings,
+    markdown_font: Entity<SelectState<SearchableVec<String>>>,
+    markdown_size: Entity<SelectState<SearchableVec<String>>>,
     account: Entity<InputState>,
     database: Entity<InputState>,
     token: Entity<InputState>,
@@ -544,6 +548,35 @@ impl SettingsForm {
         cx: &mut Context<Self>,
     ) -> Self {
         let draft = service.settings();
+        let mut fonts = cx.text_system().all_font_names();
+        if let Some(saved) = &draft.markdown.font_family {
+            fonts.push(saved.clone());
+        }
+        fonts.sort_unstable();
+        fonts.dedup();
+        let selected_font = draft
+            .markdown
+            .font_family
+            .as_ref()
+            .and_then(|font| fonts.binary_search(font).ok())
+            .map(|index| IndexPath::default().row(index));
+        let markdown_font = cx.new(|cx| {
+            SelectState::new(SearchableVec::from(fonts), selected_font, window, cx).searchable(true)
+        });
+        let font_sizes: Vec<_> = MarkdownTypography::FONT_SIZES
+            .map(|size| size.to_string())
+            .collect();
+        let selected_size = IndexPath::new(usize::from(
+            draft.markdown.font_size() - MarkdownTypography::FONT_SIZES.start(),
+        ));
+        let markdown_size = cx.new(|cx| {
+            SelectState::new(
+                SearchableVec::from(font_sizes),
+                Some(selected_size),
+                window,
+                cx,
+            )
+        });
         let account =
             cx.new(|cx| InputState::new(window, cx).default_value(draft.sync.account_id.clone()));
         let database =
@@ -565,6 +598,8 @@ impl SettingsForm {
             service,
             runtime,
             draft,
+            markdown_font,
+            markdown_size,
             account,
             database,
             token,
@@ -599,9 +634,20 @@ impl SettingsForm {
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let result = self.fields(cx).and_then(|fields| {
+            let font_size = self
+                .markdown_size
+                .read(cx)
+                .selected_value()
+                .and_then(|size| size.parse().ok())
+                .unwrap_or_else(|| self.draft.markdown.font_size());
+            let font_family = self.markdown_font.read(cx).selected_value().cloned();
             self.service.save_settings(|s| {
                 s.apply(fields);
                 s.appearance = self.draft.appearance;
+                s.markdown = MarkdownTypography {
+                    font_family,
+                    font_size,
+                };
                 s.auto_check_updates = self.draft.auto_check_updates;
             })
         });
@@ -619,6 +665,7 @@ impl SettingsForm {
             view.editor.update(cx, |editor, cx| {
                 editor.set_auto_close(settings.auto_close_brackets, window, cx)
             });
+            view.live_editor.update(cx, |_, cx| cx.notify());
             cx.notify();
         });
         true
@@ -725,6 +772,35 @@ impl Render for SettingsForm {
                                             }))
                                     }),
                                 ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .v_flex()
+                            .gap_2()
+                            .border_t_1()
+                            .border_color(cx.theme().border)
+                            .pt_3()
+                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Markdown"))
+                            .child(
+                                Form::new()
+                                    .child(
+                                        Field::new().label("Font").child(
+                                            Select::new(&self.markdown_font)
+                                                .w_full()
+                                                .placeholder("Default")
+                                                .accessibility_label("Markdown font")
+                                                .search_placeholder("Search installed fonts")
+                                                .cleanable(true),
+                                        ),
+                                    )
+                                    .child(
+                                        Field::new().label("Font size (px)").child(
+                                            Select::new(&self.markdown_size)
+                                                .w(px(96.))
+                                                .accessibility_label("Markdown font size"),
+                                        ),
+                                    ),
                             ),
                     )
                     .child(
