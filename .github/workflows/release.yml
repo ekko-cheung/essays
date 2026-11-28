@@ -1,77 +1,87 @@
 name: Release
 
-# Pushing a version tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`) builds the
-# app for macOS and Windows and attaches the installers to a GitHub release.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write # create the release and upload assets
+  contents: read
 
 jobs:
-  release:
+  package:
     strategy:
       fail-fast: false
-      # Each job merges its platform into latest.json, so run them one at a time
-      # to avoid two jobs overwriting each other's entry.
-      max-parallel: 1
       matrix:
         include:
-          - os: macos-latest # Apple Silicon
-            args: --target aarch64-apple-darwin
-            rust_targets: aarch64-apple-darwin
-          - os: macos-latest # Intel
-            args: --target x86_64-apple-darwin
-            rust_targets: x86_64-apple-darwin
-          - os: windows-latest
-            args: ""
-            rust_targets: ""
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: pnpm
-
-      # latest.json advertises the app version, so a vX.Y.Z tag must match
-      # tauri.conf.json — otherwise clients would never see the update.
-      - name: Check tag matches app version
-        shell: bash
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-          if [ "$tag" != "$version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match app version $version"
-            exit 1
-          fi
-
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust_targets }}
-
+          targets: ${{ matrix.target }}
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: ". -> target"
-
-      - run: pnpm install --frozen-lockfile
-
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Signs the updater bundles. The public half lives in tauri.conf.json.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          key: ${{ matrix.target }}
+      - name: Read and verify release version
+        id: version
+        shell: bash
+        run: |
+          version="$(cargo metadata --locked --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "essays"))')"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME must match Cargo package version v$version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - run: cargo test --workspace --locked
+      - run: cargo build --release --locked -p essays --target ${{ matrix.target }}
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: bash packaging/macos.sh "${{ steps.version.outputs.value }}" "${{ matrix.target }}"
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (!(Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ./packaging/windows.ps1 -Version '${{ steps.version.outputs.value }}' -Compiler $compiler
+      - uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Essays ${{ github.ref_name }}
-          releaseBody: See the assets below to download the installer for your system.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+          name: essays-${{ matrix.target }}
+          path: |
+            dist/Essays-*.dmg
+            dist/Essays-*-setup.exe
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: essays-*
+          merge-multiple: true
+          path: dist
+      - name: Publish installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum -- *.dmg *.exe > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            --notes "Quit your existing Essays instance before manually installing this release. Your notes and sync settings remain in your existing user data directory." \
+            --title "Essays ${GITHUB_REF_NAME#v}" -- *.dmg *.exe SHA256SUMS

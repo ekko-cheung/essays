@@ -46,6 +46,25 @@ impl Db {
         Ok(Tag { id, name: name.into(), color: color.into(), note_count: 0 })
     }
 
+    pub fn create_tag_for_note(&self, note_id: &str, name: &str, color: &str) -> Result<Tag> {
+        let tx = self.conn.unchecked_transaction()?;
+        let mut tag = self.create_tag(name, color)?;
+        let n = tx.execute(
+            "UPDATE note SET updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+            params![now_ms(), note_id],
+        )?;
+        if n == 0 {
+            return Err(Error::NotFound(note_id.into()));
+        }
+        tx.execute(
+            "INSERT INTO note_tag (note_id, tag_id) VALUES (?1, ?2)",
+            params![note_id, tag.id],
+        )?;
+        tx.commit()?;
+        tag.note_count = 1;
+        Ok(tag)
+    }
+
     pub fn update_tag(&self, id: &str, name: &str, color: &str) -> Result<()> {
         let name = name.trim();
         self.check_tag(name, color, Some(id))?;
@@ -128,6 +147,15 @@ mod tests {
         let nb = db.create_notebook(None, "NB").unwrap();
         let note = db.create_note(&nb.id).unwrap();
         (db, note.id)
+    }
+
+    #[test]
+    fn creates_and_attaches_a_tag_in_one_transaction() {
+        let (db, note) = setup();
+        let tag = db.create_tag_for_note(&note, "Rust", DEFAULT_TAG_COLOR).unwrap();
+        assert_eq!(db.get_note(&note).unwrap().tag_ids, [tag.id]);
+        assert!(db.create_tag_for_note("missing", "Unused", DEFAULT_TAG_COLOR).is_err());
+        assert_eq!(db.list_tags().unwrap().len(), 1);
     }
 
     #[test]
