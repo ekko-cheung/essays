@@ -44,7 +44,7 @@ pub fn run() {
         Err(error) => Err(error),
     };
     let app = gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+        .with_assets(gpui_kit::assets::AllAssets)
         .with_quit_mode(QuitMode::Explicit);
     app.on_reopen(open);
     app.run(move |cx| {

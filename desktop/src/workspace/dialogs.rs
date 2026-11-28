@@ -497,6 +497,7 @@ fn confirm_delete(
     window.open_alert_dialog(cx, move |dialog, _, _| {
         let delete = delete.clone();
         dialog
+            .confirm()
             .title(title.clone())
             .description(description)
             .button_props(

@@ -12,9 +12,3 @@ logs
 *.njsproj
 *.sln
 *.sw?
-
-# Local artifacts left by earlier versions
-/src-tauri/gen/
-/.tauri/
-/node_modules/
-/dist-ssr/

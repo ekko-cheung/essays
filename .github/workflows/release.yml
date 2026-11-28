@@ -10,39 +10,54 @@ permissions:
 
 jobs:
   package:
+    name: Package GPUI (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-15
             target: aarch64-apple-darwin
+            platform: macos-arm64
+            extension: dmg
           - os: macos-15-intel
             target: x86_64-apple-darwin
+            platform: macos-x64
+            extension: dmg
           - os: windows-2025
             target: x86_64-pc-windows-msvc
+            platform: windows-x64-setup
+            extension: exe
     runs-on: ${{ matrix.os }}
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - uses: swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-      - name: Read and verify release version
+      - name: Read desktop crate version
         id: version
-        shell: bash
+        shell: pwsh
         run: |
-          version="$(cargo metadata --locked --no-deps --format-version 1 | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "essays"))')"
-          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME must match Cargo package version v$version"
-            exit 1
-          fi
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-      - run: cargo test --workspace --locked
-      - run: cargo build --release --locked -p essays --target ${{ matrix.target }}
+          $metadata = cargo metadata --locked --no-deps --format-version 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = ($metadata | ConvertFrom-Json).packages.Where({ $_.name -eq 'essays' }).version
+          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw 'The essays desktop crate must have an X.Y.Z release version.'
+          }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME must match Cargo package version v$version."
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+      - name: Test native Rust workspace
+        run: cargo test --workspace --locked --target ${{ matrix.target }}
+      - name: Build GPUI desktop binary
+        run: cargo build --release --locked -p essays --target ${{ matrix.target }}
       - name: Package macOS
         if: runner.os == 'macOS'
         run: bash packaging/macos.sh "${{ steps.version.outputs.value }}" "${{ matrix.target }}"
@@ -55,17 +70,19 @@ jobs:
             choco install innosetup --yes --no-progress
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+          if (!(Test-Path -LiteralPath $compiler -PathType Leaf)) {
+            throw "Inno Setup compiler was not found at $compiler."
+          }
           ./packaging/windows.ps1 -Version '${{ steps.version.outputs.value }}' -Compiler $compiler
-      - uses: actions/upload-artifact@v4
+      - name: Upload native installer
+        uses: actions/upload-artifact@v4
         with:
           name: essays-${{ matrix.target }}
-          path: |
-            dist/Essays-*.dmg
-            dist/Essays-*-setup.exe
+          path: dist/Essays-${{ steps.version.outputs.value }}-${{ matrix.platform }}.${{ matrix.extension }}
           if-no-files-found: error
 
   publish:
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: package
     runs-on: ubuntu-latest
     permissions:
@@ -77,11 +94,24 @@ jobs:
           merge-multiple: true
           path: dist
       - name: Publish installers
+        shell: bash
+        working-directory: dist
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd dist
-          sha256sum -- *.dmg *.exe > SHA256SUMS
+          version="${GITHUB_REF_NAME#v}"
+          installers=(
+            "Essays-$version-macos-arm64.dmg"
+            "Essays-$version-macos-x64.dmg"
+            "Essays-$version-windows-x64-setup.exe"
+          )
+          for installer in "${installers[@]}"; do
+            if [[ ! -s "$installer" ]]; then
+              echo "::error::Missing or empty installer $installer"
+              exit 1
+            fi
+          done
+          sha256sum -- "${installers[@]}" > SHA256SUMS
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
             --notes "Quit your existing Essays instance before manually installing this release. Your notes and sync settings remain in your existing user data directory." \
-            --title "Essays ${GITHUB_REF_NAME#v}" -- *.dmg *.exe SHA256SUMS
+            --title "Essays $version" -- "${installers[@]}" SHA256SUMS

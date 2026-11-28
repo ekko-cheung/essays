@@ -4,6 +4,7 @@ version = "0.5.0"
 edition = "2024"
 
 [dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 dirs = "6"
 essays-core = { path = "../core" }
 gpui-kit = { version = "=0.11.0", default-features = false, features = ["component", "assets", "tree-sitter-markdown", "tree-sitter-markdown-inline", "syntect"] }
