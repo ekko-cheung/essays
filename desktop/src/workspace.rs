@@ -1,6 +1,7 @@
 mod dialogs;
 mod markdown_edit;
 mod panes;
+mod theme;
 
 use crate::{
     service::{Result, Service},
@@ -16,7 +17,7 @@ use essays_core::{
 };
 use gpui_kit::{
     component::{
-        ActiveTheme, StyledExt, Theme, ThemeMode, WindowExt,
+        ActiveTheme, StyledExt, WindowExt,
         button::{Button, ButtonVariants},
         input::{EditorState, InputEvent, InputState},
         notification::Notification,
@@ -550,13 +551,7 @@ pub(crate) struct UpdateSession {
 }
 impl Global for UpdateSession {}
 
-fn apply_appearance(appearance: Appearance, window: &mut Window, cx: &mut App) {
-    match appearance {
-        Appearance::System => Theme::sync_system_appearance(Some(window), cx),
-        Appearance::Light => Theme::change(ThemeMode::Light, Some(window), cx),
-        Appearance::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
-    }
-}
+use theme::apply_appearance;
 
 impl Render for Workspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

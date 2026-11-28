@@ -1,8 +1,9 @@
 use super::*;
 use gpui_kit::component::{
-    IconName, Selectable, Sizable,
+    Icon, IconName, Selectable, Sizable,
     input::{Editor, Input},
     menu::{DropdownMenu, PopupMenu, PopupMenuItem},
+    tab::TabBar,
     text::TextView,
 };
 
@@ -38,13 +39,19 @@ impl Workspace {
         let toolbar = div()
             .h_flex()
             .justify_between()
-            .gap_1()
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("Notebooks"))
+            .gap_2()
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Notebooks"),
+            )
             .child(
                 Button::new("new-notebook")
                     .ghost()
                     .small()
                     .icon(IconName::Plus)
+                    .accessibility_label("New notebook")
                     .tooltip("New notebook…")
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.notebook_dialog(None, None, window, cx)
@@ -54,13 +61,21 @@ impl Workspace {
             .v_flex()
             .size_full()
             .min_h_0()
-            .px_2()
-            .pt_3()
-            .pb_2()
-            .gap_3()
+            .p_3()
+            .gap_2()
             .bg(cx.theme().sidebar)
+            .text_color(cx.theme().sidebar_foreground)
             .child(toolbar)
-            .child(Input::new(&self.search).small())
+            .child(
+                Input::new(&self.search)
+                    .small()
+                    .aria_label("Search notes")
+                    .prefix(
+                        Icon::new(IconName::Search)
+                            .small()
+                            .text_color(cx.theme().muted_foreground),
+                    ),
+            )
             .child(
                 div().h_flex().gap_2().child(self.filters(cx)).child(
                     Button::new("manage")
@@ -104,15 +119,23 @@ impl Workspace {
                     .v_flex()
                     .flex_1()
                     .min_h_0()
+                    .mt_1()
+                    .gap_0p5()
                     .overflow_y_scroll()
                     .child(
                         Button::new("all-notes")
                             .ghost()
                             .small()
                             .w_full()
-                            .justify_start()
+                            .accessibility_label("All notes")
+                            .icon(IconName::BookOpen)
                             .selected(self.query.notebook_id.is_none())
-                            .label("All notes")
+                            .when(self.query.notebook_id.is_none(), |button| {
+                                button
+                                    .bg(cx.theme().sidebar_accent)
+                                    .text_color(cx.theme().sidebar_accent_foreground)
+                            })
+                            .child(div().flex_1().truncate().child("All notes"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.select_notebook(None, window, cx)
                             })),
@@ -124,6 +147,9 @@ impl Workspace {
                     .h_flex()
                     .justify_between()
                     .gap_1()
+                    .pt_2()
+                    .border_t_1()
+                    .border_color(cx.theme().sidebar_border)
                     .child(
                         Button::new("settings")
                             .ghost()
@@ -135,9 +161,15 @@ impl Workspace {
                             ),
                     )
                     .child(
-                        Button::new("help").ghost().small().label("Help…").on_click(
-                            cx.listener(|this, _, window, cx| this.help_dialog(window, cx)),
-                        ),
+                        Button::new("help")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Info)
+                            .accessibility_label("Keyboard shortcuts")
+                            .tooltip("Keyboard shortcuts…")
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.help_dialog(window, cx)),
+                            ),
                     ),
             )
     }
@@ -347,6 +379,11 @@ impl Workspace {
                     } else {
                         IconName::ChevronDown
                     })
+                    .accessibility_label(if collapsed {
+                        "Expand notebook"
+                    } else {
+                        "Collapse notebook"
+                    })
                     .tooltip(if collapsed {
                         "Expand notebook"
                     } else {
@@ -367,10 +404,15 @@ impl Workspace {
                     .ghost()
                     .small()
                     .selected(selected)
+                    .when(selected, |button| {
+                        button
+                            .bg(cx.theme().sidebar_accent)
+                            .text_color(cx.theme().sidebar_accent_foreground)
+                    })
                     .min_w_0()
                     .flex_1()
-                    .justify_start()
-                    .label(notebook.name.clone())
+                    .accessibility_label(notebook.name.clone())
+                    .child(div().flex_1().truncate().child(notebook.name.clone()))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.select_notebook(Some(open_id.clone()), window, cx)
                     })),
@@ -380,6 +422,7 @@ impl Workspace {
                     .ghost()
                     .xsmall()
                     .icon(IconName::Ellipsis)
+                    .accessibility_label(format!("Actions for {}", notebook.name))
                     .tooltip("Notebook actions")
                     .dropdown_menu(move |menu, window, cx| {
                         let create = entity.clone();
@@ -474,11 +517,22 @@ impl Workspace {
             .as_ref()
             .and_then(|id| self.notebooks.iter().find(|n| &n.id == id))
             .map_or("All notes", |n| &n.name);
+        let count = self.notes.len();
+        let count_label = if count == 1 {
+            "1 note".to_owned()
+        } else {
+            format!("{count} notes")
+        };
+        let ring = cx.theme().ring;
         div()
             .id("notes-pane")
             .v_flex()
             .size_full()
             .min_h_0()
+            .bg(cx.theme().colors.list)
+            .border_1()
+            .border_color(transparent_black())
+            .focus_visible(move |style| style.border_color(ring))
             .key_context("EssaysNoteList")
             .track_focus(&self.notes_focus)
             .tab_stop(true)
@@ -493,22 +547,35 @@ impl Workspace {
                     .h_flex()
                     .justify_between()
                     .gap_2()
-                    .px_3()
-                    .py_2()
+                    .px_4()
+                    .py_3()
+                    .bg(cx.theme().list_head)
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(
                         div()
+                            .v_flex()
                             .min_w_0()
-                            .truncate()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(heading.to_owned()),
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .truncate()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(heading.to_owned()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(count_label),
+                            ),
                     )
                     .child(
                         Button::new("new-note")
-                            .ghost()
+                            .outline()
                             .small()
                             .icon(IconName::Plus)
+                            .accessibility_label("New note")
                             .tooltip("New note")
                             .on_click(cx.listener(|this, _, window, cx| this.new_note(window, cx))),
                     ),
@@ -565,6 +632,9 @@ impl Workspace {
             .collect::<Vec<_>>()
             .join(" ");
         let mut metadata = Vec::new();
+        if note.pinned {
+            metadata.push("Pinned");
+        }
         if let Some(status) = self
             .statuses
             .iter()
@@ -581,21 +651,36 @@ impl Workspace {
         let open = note.id.clone();
         let menu_note = note.clone();
         let entity = cx.entity().downgrade();
-        let hover = cx.theme().accent;
+        let hover = if selected {
+            cx.theme().list_active
+        } else {
+            cx.theme().list_hover
+        };
         let focus = self.notes_focus.clone();
         div()
             .id(format!("note-row-{id}"))
             .h_flex()
+            .relative()
             .w_full()
             .h(rems(4.5))
             .gap_2()
-            .px_3()
+            .px_4()
             .py_2()
             .border_b_1()
             .border_color(cx.theme().border)
-            .when(selected, |row| row.bg(cx.theme().accent))
+            .when(selected, |row| {
+                row.bg(cx.theme().list_active).child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_2()
+                        .bottom_2()
+                        .w_0p5()
+                        .rounded_full()
+                        .bg(cx.theme().list_active_border),
+                )
+            })
             .hover(move |row| row.bg(hover))
-            .cursor_pointer()
             .on_click(cx.listener(move |this, _, window, cx| {
                 window.focus(&focus, cx);
                 this.select_note(&open, window, cx);
@@ -606,13 +691,13 @@ impl Workspace {
                     .flex_1()
                     .min_w_0()
                     .gap_0p5()
-                    .child(div().font_weight(FontWeight::SEMIBOLD).truncate().child(
-                        if note.pinned {
-                            format!("• {title}")
-                        } else {
-                            title.to_owned()
-                        },
-                    ))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(title.to_owned()),
+                    )
                     .child(
                         div()
                             .truncate()
@@ -633,6 +718,7 @@ impl Workspace {
                     .ghost()
                     .xsmall()
                     .icon(IconName::Ellipsis)
+                    .accessibility_label(format!("Actions for {title}"))
                     .tooltip("Note actions")
                     .dropdown_menu(move |menu, _, _| {
                         let pin_owner = entity.clone();
@@ -667,49 +753,120 @@ impl Workspace {
 
     pub(super) fn note_editor(&self, mode: View, cx: &mut Context<Self>) -> AnyElement {
         let Some(note) = self.note.as_ref() else {
+            let missing_notebooks = self.notebooks.is_empty();
+            let can_create_note = self.query.notebook_id.is_some() && self.notes.is_empty();
             return div()
                 .v_flex()
                 .size_full()
                 .items_center()
                 .justify_center()
-                .text_color(cx.theme().muted_foreground)
-                .child("Select a note to start writing")
+                .p_4()
+                .gap_3()
+                .child(
+                    div()
+                        .h_flex()
+                        .justify_center()
+                        .size_10()
+                        .rounded(cx.theme().radius)
+                        .bg(cx.theme().sidebar_accent)
+                        .child(Icon::new(IconName::FileText).text_color(cx.theme().primary)),
+                )
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_center()
+                        .child(if missing_notebooks {
+                            "Create your first notebook"
+                        } else if can_create_note {
+                            "Start a note"
+                        } else {
+                            "Select a note"
+                        }),
+                )
+                .when(missing_notebooks || can_create_note, |pane| {
+                    let label = if missing_notebooks {
+                        "New notebook…"
+                    } else {
+                        "New note"
+                    };
+                    pane.child(
+                        Button::new("empty-workspace-action")
+                            .outline()
+                            .label(label)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                if missing_notebooks {
+                                    this.notebook_dialog(None, None, window, cx);
+                                } else {
+                                    this.new_note(window, cx);
+                                }
+                            })),
+                    )
+                })
                 .into_any_element();
         };
-        let state = if self.save_failed {
-            "Couldn’t save"
+        let (save_label, save_icon, save_color) = if self.save_failed {
+            (
+                "Couldn’t save",
+                Some(IconName::CircleAlert),
+                cx.theme().danger,
+            )
         } else if self.is_dirty(cx) {
-            "Unsaved"
+            ("Unsaved", None, cx.theme().foreground)
         } else {
-            "Saved"
+            ("Saved", Some(IconName::Check), cx.theme().muted_foreground)
         };
+        let modes = [View::Source, View::Split, View::Preview];
+        let mode_index = modes.iter().position(|value| *value == mode).unwrap_or(1);
         let preview = || {
             let markdown = self.editor.read(cx).value();
-            div().size_full().min_w_0().min_h_0().p_4().child(
-                TextView::markdown(format!("preview-{}", note.id), markdown)
-                    .scrollable(true)
-                    .size_full()
-                    .on_link_click(|url, _, _, cx| {
-                        if url.starts_with("https://")
-                            || url.starts_with("http://")
-                            || url.starts_with("mailto:")
-                        {
-                            cx.open_url(url);
-                        }
-                    }),
-            )
-        };
-        let source = || {
             div()
+                .v_flex()
                 .size_full()
                 .min_w_0()
                 .min_h_0()
+                .when(mode == View::Split, |pane| {
+                    pane.child(document_pane_heading("Preview", cx))
+                })
+                .child(
+                    div().flex_1().min_h_0().p_4().child(
+                        TextView::markdown(format!("preview-{}", note.id), markdown)
+                            .scrollable(true)
+                            .size_full()
+                            .on_link_click(|url, _, _, cx| {
+                                if url.starts_with("https://")
+                                    || url.starts_with("http://")
+                                    || url.starts_with("mailto:")
+                                {
+                                    cx.open_url(url);
+                                }
+                            }),
+                    ),
+                )
+        };
+        let source = || {
+            div()
+                .v_flex()
+                .size_full()
+                .min_w_0()
+                .min_h_0()
+                .bg(cx.theme().muted)
+                .when(mode == View::Split, |pane| {
+                    pane.child(document_pane_heading("Markdown", cx))
+                })
                 .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                     if this.service.settings().auto_close_brackets {
                         super::markdown_edit::complete_fence(&this.editor, event, window, cx);
                     }
                 }))
-                .child(Editor::new(&self.editor).size_full())
+                .child(
+                    div().flex_1().min_h_0().px_2().pt_2().child(
+                        Editor::new(&self.editor)
+                            .size_full()
+                            .appearance(false)
+                            .aria_label("Markdown source"),
+                    ),
+                )
         };
         let body = match mode {
             View::Source => source().into_any_element(),
@@ -735,17 +892,29 @@ impl Workspace {
                 div()
                     .v_flex()
                     .gap_2()
-                    .p_3()
+                    .px_4()
+                    .pt_4()
+                    .pb_3()
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(if mode == View::Preview {
                         div()
+                            .h_flex()
+                            .h_8()
+                            .px_1()
                             .text_xl()
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(note_title(&self.title.read(cx).value()).to_owned())
                             .into_any_element()
                     } else {
-                        Input::new(&self.title).into_any_element()
+                        Input::new(&self.title)
+                            .bg(cx.theme().background)
+                            .border_color(transparent_black())
+                            .px_1()
+                            .text_xl()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .aria_label("Note title")
+                            .into_any_element()
                     })
                     .child(
                         div()
@@ -759,7 +928,9 @@ impl Workspace {
                                 Button::new("save-note")
                                     .ghost()
                                     .small()
-                                    .label(state)
+                                    .when_some(save_icon, |button, icon| button.icon(icon))
+                                    .label(save_label)
+                                    .text_color(save_color)
                                     .tooltip("Save now")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.flush(cx);
@@ -767,22 +938,18 @@ impl Workspace {
                             ),
                     )
                     .child(
-                        div().h_flex().gap_1().children(
-                            [
-                                ("Source", View::Source),
-                                ("Split", View::Split),
-                                ("Preview", View::Preview),
-                            ]
-                            .map(|(label, target)| {
-                                Button::new(label)
-                                    .small()
-                                    .ghost()
-                                    .label(label)
-                                    .selected(mode == target)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.set_mode(target, window, cx)
-                                    }))
-                            }),
+                        div().h_flex().child(
+                            TabBar::new("editor-view")
+                                .segmented()
+                                .small()
+                                .children(["Source", "Split", "Preview"])
+                                .selected_index(mode_index)
+                                .last_empty_space(div())
+                                .on_click(cx.listener(move |this, index: &usize, window, cx| {
+                                    if let Some(mode) = modes.get(*index) {
+                                        this.set_mode(*mode, window, cx);
+                                    }
+                                })),
                         ),
                     ),
             )
@@ -802,6 +969,7 @@ impl Workspace {
         Button::new("note-status")
             .small()
             .outline()
+            .max_w(rems(10.))
             .label(label.to_owned())
             .dropdown_menu(move |menu, _, _| {
                 std::iter::once((None, "No status".to_owned()))
@@ -845,6 +1013,7 @@ impl Workspace {
         Button::new("note-tags")
             .small()
             .outline()
+            .max_w(rems(10.))
             .label(label)
             .dropdown_menu(move |menu, _, _| {
                 let mut menu = menu;
@@ -888,6 +1057,18 @@ impl Workspace {
                     )
             })
     }
+}
+
+fn document_pane_heading(label: &'static str, cx: &App) -> impl IntoElement {
+    div()
+        .px_4()
+        .py_2()
+        .border_b_1()
+        .border_color(cx.theme().border)
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(cx.theme().muted_foreground)
+        .child(label)
 }
 
 fn notebook_move_menu(
