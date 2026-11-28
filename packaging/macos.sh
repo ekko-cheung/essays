@@ -42,7 +42,10 @@ fi
 codesign --verify --deep --strict "$bundle"
 ln -s /Applications "$staging/Applications"
 image="dist/Essays-$version-macos-$arch.dmg"
-hdiutil create -volname Essays -srcfolder "$staging" -ov -format UDZO "$image"
+# Leave room for filesystem metadata and copy overhead beyond the signed bundle.
+bundle_kib="$(du -sk "$staging" | cut -f1)"
+image_mib=$(( (bundle_kib + 1023) / 1024 + 32 ))
+hdiutil create -megabytes "$image_mib" -volname Essays -srcfolder "$staging" -ov -format UDZO "$image"
 if [[ -n "${MACOS_NOTARY_PROFILE:-}" ]]; then
   xcrun notarytool submit "$image" --keychain-profile "$MACOS_NOTARY_PROFILE" --wait
   xcrun stapler staple "$image"
